@@ -8,7 +8,7 @@ from requests.exceptions import HTTPError
 
 load_dotenv()
 CLIENT_ACCESS_TOKEN = os.environ["client_access_token"]
-YEAR_EXTRACTION = 2019
+YEAR_EXTRACTION = 2020
 LyricsGenius = lyricsgenius.Genius(CLIENT_ACCESS_TOKEN)
 
 # Note that songs that are not in Genius but part of the top 300 songs will be included with a '0'...
