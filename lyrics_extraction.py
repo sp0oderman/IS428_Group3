@@ -8,17 +8,25 @@ from requests.exceptions import HTTPError
 
 load_dotenv()
 CLIENT_ACCESS_TOKEN = os.environ["client_access_token"]
-YEAR_EXTRACTION = 2010
+YEAR_EXTRACTION = 2016
 LyricsGenius = lyricsgenius.Genius(CLIENT_ACCESS_TOKEN)
 
 # Note that songs that are not in Genius but part of the top 300 songs will be included with a '0'...
 song_details = []
 not_in_genius = [
     'Shakira - Waka Waka (This Time for Africa) [The Official 2010 FIFA World Cup (TM) Song].txt', # 2010
-    'Bill Evans - Blue In Green.txt', # 2010 - no lyrics song
+    # 'Bill Evans - Blue In Green.txt', 2010 - no lyrics song
     'Frédéric Chopin - Nocturne en Mi Bémol Majeur, Op. 9 No. 2.txt', # 2010
     'Sachin-Jigar - Saibo.txt', # 2011
-    'Drake - Cameras / Good Ones Go Interlude.txt'  # 2011
+    'Drake - Cameras / Good Ones Go Interlude.txt',  # 2011
+    # 'Marconi Union - Weightless Part 1.txt', 2012 - no lyrics song
+    # 'Millonario & W. Corona - Éxtasis.txt', 2012 - no lyrics song
+    # 'Lana Del Rey - Summertime Sadness (Lana Del Rey Vs. Cedric Gervais).txt', 2013 - no lyrics song
+    # 'Young Money - Trophies.txt', 2014 - no lyrics song
+    # 'Hans Zimmer - Cornfield Chase.txt', 2014 - no lyrics song
+    # 'Justin Timberlake - CAN'T STOP THE FEELING! (from DreamWorks Animation's "TROLLS").txt', 2016 - no lyrics song
+    # 'Vicetone - Astronomia.txt', 2016 - no lyrics song
+    'P!nk - Just Like Fire (From the Original Motion Picture "Alice Through The Looking Glass").txt', # 2016
 ]
 
 # Read CSV file and extract song names and artists
@@ -39,7 +47,6 @@ folder_path.mkdir(parents=True, exist_ok=True)
 
 sorted_songs = sorted(song_details, key=lambda x: x[2], reverse=True)
 sorted_songs = sorted_songs[:300]
-# print(song_details[301:])
 
 # From list, extract top 300 songs based on number of streams
 for s in sorted_songs:
