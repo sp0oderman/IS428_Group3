@@ -8,7 +8,7 @@ from requests.exceptions import HTTPError
 
 load_dotenv()
 CLIENT_ACCESS_TOKEN = os.environ["client_access_token"]
-YEAR_EXTRACTION = 2020
+YEAR_EXTRACTION = 2023
 LyricsGenius = lyricsgenius.Genius(CLIENT_ACCESS_TOKEN)
 
 # Note that songs that are not in Genius but part of the top 300 songs will be included with a '0'...
@@ -29,6 +29,15 @@ not_in_genius = [
     'P!nk - Just Like Fire (From the Original Motion Picture "Alice Through The Looking Glass").txt', # 2016
     # 'ZAYN - I Don’t Wanna Live Forever (Fifty Shades Darker).txt', # 2017 - no lyrics song
     # 'Arijit Singh - Tujhe Kitna Chahne Lage (From "Kabir Singh").txt', # 2019 - no lyrics song
+    # 'Tanishk Bagchi - Raataan Lambiyan (From "Shershaah").txt', # 2021 - no lyrics song
+    # 'Øneheart - snowfall.txt', # 2022 - no lyrics song
+    # 'Doja Cat - Vegas (From the Original Motion Picture Soundtrack ELVIS).txt'  # 2022 - no lyrics song
+    # 'Fuerza Regida - Billete Grande (En Vivo).txt' # 2022 - no lyrics song
+    # 'Green Neon DJ - El Gordo Trae El Mando (Tik Tok Edit)-.txt' # 2023 - no lyrics song
+    # 'lusttqwe - F-ck Up Some Commas.txt' # 2023 - no lyrics song
+    # 'Arijit Singh - Satranga (From "ANIMAL").txt' # 2023 - no lyrics song
+    # 'Matheus & Kauan - Não Vitalício (Nunca Mais).txt' # 2023 - no lyrics song
+    # 'Sachin-Jigar - Phir Aur Kya Chahiye (From "Zara Hatke Zara Bachke").txt' # 2023 - no lyrics song
 ]
 
 # Read CSV file and extract song names and artists
