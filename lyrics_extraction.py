@@ -63,7 +63,7 @@ with INPUT_CSV.open('r', encoding='utf-8', newline='') as infile, TEMP_CSV.open(
                 continue
 
         else:
-            lyrics = '0'
+            lyrics = ''
 
         row[lyrics_idx] = lyrics
         writer.writerow(row)
