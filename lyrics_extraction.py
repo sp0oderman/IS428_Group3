@@ -8,85 +8,70 @@ from requests.exceptions import HTTPError
 
 load_dotenv()
 CLIENT_ACCESS_TOKEN = os.environ["client_access_token"]
-YEAR_EXTRACTION = 2023
+YEAR_EXTRACTION = 2010
 LyricsGenius = lyricsgenius.Genius(CLIENT_ACCESS_TOKEN)
 
-# Note that songs that are not in Genius but part of the top 300 songs will be included with a '0'...
-song_details = []
-not_in_genius = [
-    'Shakira - Waka Waka (This Time for Africa) [The Official 2010 FIFA World Cup (TM) Song].txt', # 2010
-    # 'Bill Evans - Blue In Green.txt', # 2010 - no lyrics song
-    'Frédéric Chopin - Nocturne en Mi Bémol Majeur, Op. 9 No. 2.txt', # 2010
-    'Sachin-Jigar - Saibo.txt', # 2011
-    'Drake - Cameras / Good Ones Go Interlude.txt',  # 2011
-    # 'Marconi Union - Weightless Part 1.txt', # 2012 - no lyrics song
-    # 'Millonario & W. Corona - Éxtasis.txt', # 2012 - no lyrics song
-    # 'Lana Del Rey - Summertime Sadness (Lana Del Rey Vs. Cedric Gervais).txt', # 2013 - no lyrics song
-    # 'Young Money - Trophies.txt', # 2014 - no lyrics song
-    # 'Hans Zimmer - Cornfield Chase.txt', # 2014 - no lyrics song
-    # 'Justin Timberlake - CAN'T STOP THE FEELING! (from DreamWorks Animation's "TROLLS").txt', # 2016 - no lyrics song
-    # 'Vicetone - Astronomia.txt', # 2016 - no lyrics song
-    'P!nk - Just Like Fire (From the Original Motion Picture "Alice Through The Looking Glass").txt', # 2016
-    # 'ZAYN - I Don’t Wanna Live Forever (Fifty Shades Darker).txt', # 2017 - no lyrics song
-    # 'Arijit Singh - Tujhe Kitna Chahne Lage (From "Kabir Singh").txt', # 2019 - no lyrics song
-    # 'Tanishk Bagchi - Raataan Lambiyan (From "Shershaah").txt', # 2021 - no lyrics song
-    # 'Øneheart - snowfall.txt', # 2022 - no lyrics song
-    # 'Doja Cat - Vegas (From the Original Motion Picture Soundtrack ELVIS).txt'  # 2022 - no lyrics song
-    # 'Fuerza Regida - Billete Grande (En Vivo).txt' # 2022 - no lyrics song
-    # 'Green Neon DJ - El Gordo Trae El Mando (Tik Tok Edit)-.txt' # 2023 - no lyrics song
-    # 'lusttqwe - F-ck Up Some Commas.txt' # 2023 - no lyrics song
-    # 'Arijit Singh - Satranga (From "ANIMAL").txt' # 2023 - no lyrics song
-    # 'Matheus & Kauan - Não Vitalício (Nunca Mais).txt' # 2023 - no lyrics song
-    # 'Sachin-Jigar - Phir Aur Kya Chahiye (From "Zara Hatke Zara Bachke").txt' # 2023 - no lyrics song
-]
+# Note that songs that are not in Genius will be indicated in the csv as '0'...
+http_error_song_length = 0
 
-# Read CSV file and extract song names and artists
-with open('spotify_full_list_20102023.csv', 'r', encoding='utf-8') as file:
-    csv_reader = csv.reader(file)
-    header = next(csv_reader)
-    for row in csv_reader:
-        if len(row) >= 6:
-            idx, song_name, artist_name, streams, daily, year = row[:6]
-            streams = int(float(streams))  # Handle potential float values
-            year = int(float(year.strip()))
-            if year == YEAR_EXTRACTION:
-                song_details.append((song_name, artist_name, streams))
+INPUT_CSV = Path('spotify_full_list_20102023.csv')
+TEMP_CSV = INPUT_CSV.with_suffix('.tmp')
 
-folder_path = Path(f"songs_lyrics/{YEAR_EXTRACTION}")
-folder_path.mkdir(parents=True, exist_ok=True)
+with INPUT_CSV.open('r', encoding='utf-8', newline='') as infile, TEMP_CSV.open('w', encoding='utf-8', newline='') as outfile:
+    reader = csv.reader(infile)
+    writer = csv.writer(outfile, quoting=csv.QUOTE_MINIMAL)
 
+    header = next(reader)
+    lower_header = [h.lower() for h in header]
+    if 'lyrics' not in lower_header:
+        header.append('lyrics')
+        lyrics_idx = len(header) - 1
+    else:
+        lyrics_idx = lower_header.index('lyrics')
 
-sorted_songs = sorted(song_details, key=lambda x: x[2], reverse=True)
-sorted_songs = sorted_songs[:300]
+    writer.writerow(header)
 
-# From list, extract top 300 songs based on number of streams
-for s in sorted_songs:
-    try:
-        # Clean filename to avoid invalid characters
-        filename = f"{s[0]}.txt"
-        # Replace invalid filename characters
-        invalid_chars = '<>:"/\\|?*'
-        for char in invalid_chars:
-            filename = filename.replace(char, '')
-        # save lyrics in the songs_lyrics folder as txt file
-        filepath = folder_path / filename
-        if not filepath.exists() and filename not in not_in_genius:
-            song = LyricsGenius.search_song(s[0], s[1])
-            time.sleep(1)
-            if song:
-                with open(filepath, 'w', encoding='utf-8') as txt_file:
-                    txt_file.write(song.lyrics)
-            else:
-                with open(filepath, 'w', encoding='utf-8') as txt_file:
-                    txt_file.write("0")
-                print(f"Could not find lyrics for '{s[0]}' by '{s[1]}'")
-        else:
-            print(f"Lyrics for '{s[0]}' by '{s[1]}' already exist. Skipping...")
-    except HTTPError as e:
-        if e.response.status_code == 429:
-            retry_after = int(e.response.headers.get('Retry-After', 60))
-            print(f"Rate limited. Waiting {retry_after}s...")
-            time.sleep(retry_after)
+    for row in reader:
+        if not row:
             continue
-    except Exception as e:
-        print(f"Error fetching lyrics for '{s[0]}' by '{s[1]}': {e}")
+
+        # Ensure row has enough columns to hold lyrics
+        if len(row) < len(header):
+            row += [''] * (len(header) - len(row))
+
+        # Skip if lyrics already present
+        if row[lyrics_idx].strip():
+            writer.writerow(row)
+            continue
+
+        song_name = row[1].strip() if len(row) > 1 else ''
+        artist_name = row[2].strip() if len(row) > 2 else ''
+        year = int(row[3].strip()) if len(row) > 3 and row[3].strip().isdigit() else None
+        lyrics = ''
+
+        if song_name and artist_name and year and year == YEAR_EXTRACTION:
+            try:
+                song = LyricsGenius.search_song(song_name, artist_name)
+                if song and getattr(song, 'lyrics', None):
+                    lyrics = song.lyrics
+                else:
+                    lyrics = '0'
+            except HTTPError:
+                http_error_song_length += 1
+            except Exception as e:
+                continue
+
+        else:
+            lyrics = '0'
+
+        row[lyrics_idx] = lyrics
+        writer.writerow(row)
+        time.sleep(1)
+
+if http_error_song_length != 0:
+    print(f"Encountered HTTPError for {http_error_song_length} songs. Rerun script.")
+
+# Replace the original CSV with the updated temp CSV
+TEMP_CSV.replace(INPUT_CSV)
+
+print(f"Completed: updated {INPUT_CSV} with lyrics.")
