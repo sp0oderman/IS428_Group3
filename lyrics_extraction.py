@@ -14,7 +14,7 @@ LyricsGenius = lyricsgenius.Genius(CLIENT_ACCESS_TOKEN)
 # Note that songs that are not in Genius will be indicated in the csv as '0'...
 http_error_song_length = 0
 
-INPUT_CSV = Path('spotify_full_list_20102023.csv')
+INPUT_CSV = Path('spotify_2010_2025.csv')
 TEMP_CSV = INPUT_CSV.with_suffix('.tmp')
 
 with INPUT_CSV.open('r', encoding='utf-8', newline='') as infile, TEMP_CSV.open('w', encoding='utf-8', newline='') as outfile:
@@ -52,6 +52,7 @@ with INPUT_CSV.open('r', encoding='utf-8', newline='') as infile, TEMP_CSV.open(
         if song_name and artist_name and year and year == YEAR_EXTRACTION:
             try:
                 song = LyricsGenius.search_song(song_name, artist_name)
+                time.sleep(1)
                 if song and getattr(song, 'lyrics', None):
                     lyrics = song.lyrics
                 else:
@@ -66,7 +67,6 @@ with INPUT_CSV.open('r', encoding='utf-8', newline='') as infile, TEMP_CSV.open(
 
         row[lyrics_idx] = lyrics
         writer.writerow(row)
-        time.sleep(1)
 
 if http_error_song_length != 0:
     print(f"Encountered HTTPError for {http_error_song_length} songs. Rerun script.")
