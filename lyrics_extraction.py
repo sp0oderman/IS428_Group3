@@ -16,10 +16,10 @@ LyricsGenius = lyricsgenius.Genius(CLIENT_ACCESS_TOKEN)
 http_error_song_length = 0
 
 INPUT_CSV = Path('spotify_2010_2025.csv')
-TEMP_CSV = INPUT_CSV.with_suffix('.tmp')
+TEMP_CSV = Path(f'spotify_{YEAR_EXTRACTION}.csv')
 
 
-async def fetch_song_lyrics(song_name: str, artist_name: str, retries: int = 3, backoff_sec: float = 1.0) -> str:
+async def fetch_song_lyrics(song_name: str, artist_name: str,) -> str:
     """Fetch lyrics for a song, retrying on transient errors.
 
     Returns '0' if lyrics are unavailable or if the request repeatedly fails.
@@ -27,22 +27,31 @@ async def fetch_song_lyrics(song_name: str, artist_name: str, retries: int = 3, 
 
     global http_error_song_length
 
-    for attempt in range(1, retries + 1):
-        try:
-            song = await asyncio.to_thread(LyricsGenius.search_song, song_name, artist_name)
-            if song and getattr(song, 'lyrics', None):
-                return song.lyrics
-            return '0'
-        except HTTPError:
-            # Rate limiting or temporary server error; retry with backoff.
-            if attempt < retries:
-                await asyncio.sleep(backoff_sec * attempt)
-                continue
-            http_error_song_length += 1
-            return ''
-        except Exception:
-            # Any other issue (e.g. parsing) should not stop processing.
-            return ''
+    try:
+        song = await asyncio.to_thread(LyricsGenius.search_song, song_name, artist_name)
+        # Avoid hitting the Genius API too quickly
+        await asyncio.sleep(1)
+        if song and getattr(song, 'lyrics', None):
+            return song.lyrics
+        return '0'
+    except HTTPError:
+        # Rate limiting or temporary server error; retry with backoff.
+        retry = 3
+        while retry > 0:
+            try:
+                song = await asyncio.to_thread(LyricsGenius.search_song, song_name, artist_name)
+                await asyncio.sleep(1)
+                if song and getattr(song, 'lyrics', None):
+                    return song.lyrics
+                return '0'
+            except HTTPError:
+                retry -= 1
+                await asyncio.sleep(1)  # Backoff before retrying
+        http_error_song_length += 1
+        return ''
+    except Exception:
+        # Any other issue (e.g. parsing) should not stop processing.
+        return '0'
 
 
 async def main() -> None:
@@ -82,20 +91,22 @@ async def main() -> None:
             lyrics = ''
             if song_name and artist_name and year == YEAR_EXTRACTION:
                 lyrics = await fetch_song_lyrics(song_name, artist_name)
-                # Avoid hitting the Genius API too quickly
-                await asyncio.sleep(1)
 
-            lyrics = re.sub(r'[\r\n]+', ' ', lyrics)
-            row[lyrics_idx] = lyrics
-            writer.writerow(row)
+            if lyrics != "":
+                lyrics = re.sub(r'[\r\n]+', ' ', lyrics)
+                row[lyrics_idx] = lyrics
+                writer.writerow(row)
+            elif year == YEAR_EXTRACTION:
+                row[lyrics_idx] = ''
+                writer.writerow(row)
 
     if http_error_song_length != 0:
         print(f"Encountered HTTPError for {http_error_song_length} songs. Rerun script.")
 
     # Replace the original CSV with the updated temp CSV
-    TEMP_CSV.replace(INPUT_CSV)
+    # TEMP_CSV.replace(INPUT_CSV)
 
-    print(f"Completed: updated {INPUT_CSV} with lyrics.")
+    print(f"Completed: Added {TEMP_CSV}.")
 
 
 if __name__ == '__main__':
