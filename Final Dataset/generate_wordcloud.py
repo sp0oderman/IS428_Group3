@@ -1,9 +1,20 @@
 import pandas as pd
 import re
 from collections import Counter
+import nltk
+from nltk.corpus import stopwords
+from nltk.stem import PorterStemmer, WordNetLemmatizer
+
+# Ensure required NLTK resources are downloaded
+nltk.download('stopwords', quiet=True)
+nltk.download('wordnet', quiet=True)
+
+# Initialize stemmer and lemmatizer
+stemmer = PorterStemmer()
+lemmatizer = WordNetLemmatizer()
 
 # Define a broad set of English stopwords including typical lyric fillers and song structure markers
-STOPWORDS = set([
+CUSTOM_STOPWORDS = set([
     "i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you", "your", 
     "yours", "yourself", "yourselves", "he", "him", "his", "himself", "she", 
     "her", "hers", "herself", "it", "its", "itself", "they", "them", "their", 
@@ -25,6 +36,9 @@ STOPWORDS = set([
     "chorus", "verse", "intro", "outro", "bridge", "pre", "post", "hook"
 ])
 
+# Combine custom stopwords with NLTK stopwords
+STOPWORDS = CUSTOM_STOPWORDS.union(set(stopwords.words('english')))
+
 def clean_text(text):
     if pd.isna(text):
         return []
@@ -36,13 +50,22 @@ def clean_text(text):
     text = re.sub(r'[^\w\s]', ' ', text)
     # Split into words
     words = text.split()
-    # Remove stopwords and short words (length 1 or 2 often are meaningless)
-    words = [w for w in words if w not in STOPWORDS and len(w) > 2]
-    return words
+    # Process words: remove stopwords/short words, lemmatize, and stem
+    processed_words = []
+    for w in words:
+        if w not in STOPWORDS and len(w) > 2:
+            # Lemmatize first
+            lem = lemmatizer.lemmatize(w)
+            # Stem next
+            stem = stemmer.stem(lem)
+            # Store tuple of (stemmed_word, original_word)
+            processed_words.append((stem, w))
+            
+    return processed_words
 
 def main():
     input_file = "masterlist_lyrics_with_features_cleaned_top300.csv"
-    output_file = "wordcloud_data_by_year.csv"
+    output_file = "wordcloud_data_by_year_updated.csv"
     
     print(f"Reading {input_file}...")
     df = pd.read_csv(input_file)
@@ -65,15 +88,26 @@ def main():
         for text in group['Lyrics']:
             all_words.extend(clean_text(text))
             
-        counter = Counter(all_words)
+        # Count frequencies of each stem
+        stem_counter = Counter(stem for stem, original in all_words)
         
-        # Keep top 100 words per year for the word cloud
-        top_words = counter.most_common(100)
+        # Keep track of which original words correspond to which stem
+        stem_to_original = {}
+        for stem, original in all_words:
+            if stem not in stem_to_original:
+                stem_to_original[stem] = Counter()
+            stem_to_original[stem][original] += 1
+            
+        # Keep top 100 words per year for the word cloud based on stems
+        top_stems = stem_counter.most_common(100)
         
-        for word, count in top_words:
+        for stem, count in top_stems:
+            # Get the most common original word for this stem
+            best_original = stem_to_original[stem].most_common(1)[0][0]
+            
             word_counts_by_year.append({
                 'Year': year,
-                'Word': word,
+                'Word': best_original,
                 'Frequency': count
             })
             
