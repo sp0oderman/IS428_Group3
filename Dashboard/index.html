@@ -142,11 +142,13 @@
             <div class="chart-header" style="margin-top: 10px; padding: 0;">
                 <h3 style="font-size: 0.9rem; margin-bottom: 5px; opacity: 0.8;">Category Distribution</h3>
             </div>
-            <div id="wordCategoryBarContainer" style="width: 100%; height: 260px; background: rgba(0,0,0,0.05); border-radius: 12px; position: relative; padding: 10px;">
+            <div id="wordCategoryBarContainer"
+                style="width: 100%; height: 260px; background: rgba(0,0,0,0.05); border-radius: 12px; position: relative;">
                 <!-- Bar Chart D3 injected here -->
-                <div style="position: absolute; bottom: 8px; left: 0; right: 0; text-align: center; font-size: 0.65rem; color: rgba(255,255,255,0.4); pointer-events: none; font-style: italic;">
-                    * Note: Common uncategorized words (Other) are excluded.
-                </div>
+            </div>
+            <div
+                style="margin-top: 8px; text-align: center; font-size: 0.65rem; color: rgba(255,255,255,0.4); pointer-events: none; font-style: italic;">
+                * Note: Common uncategorized words (Other) are excluded.
             </div>
         </aside>
 
@@ -288,8 +290,11 @@
             </div>
             <div style="position: relative;">
                 <!-- Milestone Toggle (Top Right of Chart Container) -->
-                <div style="position: absolute; top: -35px; right: 0; z-index: 1000; display: flex; align-items: center; gap: 8px; background: rgba(30, 41, 59, 0.4); padding: 4px 10px; border-radius: 20px; backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.08);">
-                    <span style="font-size: 0.7rem; color: var(--text-secondary); font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase;">Timeline Events</span>
+                <div
+                    style="position: absolute; top: -35px; right: 0; z-index: 1000; display: flex; align-items: center; gap: 8px; background: rgba(30, 41, 59, 0.4); padding: 4px 10px; border-radius: 20px; backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.08);">
+                    <span
+                        style="font-size: 0.7rem; color: var(--text-secondary); font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase;">Timeline
+                        Events</span>
                     <label class="switch">
                         <input id="milestoneToggleInput" type="checkbox" checked onchange="toggleIndustryEvents()">
                         <span class="slider round"></span>
@@ -322,6 +327,29 @@
             <div id="parallelChartContainer"
                 style="width: 100%; height: 500px; background: rgba(0,0,0,0.2); border-radius: 12px; margin-bottom: 40px; border: 1px solid rgba(255,255,255,0.05); overflow: hidden;">
                 <!-- Parallel Coordinates rendered dynamically -->
+            </div>
+
+            <div class="chart-header"
+                style="margin-top: 40px; border-top: 1px solid var(--glass-border); padding-top: 20px; display: flex; justify-content: space-between; align-items: flex-start;">
+                <div>
+                    <h2>Lyric Evolution Flow (ThemeRiver)</h2>
+                    <p class="subtitle">Witness the macroscopic shift of lyric categories from 2010 to 2023. Category
+                        labels are positioned at their points of peak frequency.</p>
+                </div>
+                <div
+                    style="display: flex; align-items: center; gap: 8px; background: rgba(30, 41, 59, 0.4); padding: 6px 12px; border-radius: 20px; backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.08);">
+                    <span
+                        style="font-size: 0.7rem; color: var(--text-secondary); font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase;">Timeline
+                        Events</span>
+                    <label class="switch">
+                        <input id="lyricEventToggleInput" type="checkbox" checked onchange="toggleIndustryEvents()">
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+            </div>
+            <div id="lyricEvolutionContainer"
+                style="width: 100%; height: 450px; background: rgba(0,0,0,0.2); border-radius: 12px; margin-bottom: 40px; border: 1px solid rgba(255,255,255,0.05); position: relative; overflow: visible;">
+                <!-- Lyric Evolution Flow rendered dynamically -->
             </div>
         </main>
     </div>

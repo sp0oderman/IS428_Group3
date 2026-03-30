@@ -356,3 +356,85 @@ input:checked + .slider:before {
 .milestone-group:hover circle {
   filter: drop-shadow(0 0 8px var(--accent));
 }
+
+/* Lyric Evolution Flow (ThemeRiver) Styling */
+.lyric-stream {
+    transition: opacity 0.3s ease, filter 0.3s ease;
+    cursor: pointer;
+}
+
+.lyric-stream:hover {
+    filter: brightness(1.2) drop-shadow(0 0 10px rgba(255,255,255,0.2));
+}
+
+.lyric-stream.dimmed {
+    opacity: 0.15;
+}
+
+.lyric-bubble-group {
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    cursor: help;
+}
+
+.lyric-bubble-group:hover {
+    transform: scale(1.1);
+}
+
+.lyric-bubble-circle {
+    fill: rgba(15, 23, 42, 0.85);
+    stroke: rgba(255,255,255,0.2);
+    stroke-width: 1.5px;
+    backdrop-filter: blur(4px);
+}
+
+.lyric-bubble-text {
+    font-size: 10px;
+    font-weight: 700;
+    fill: #fff;
+    text-anchor: middle;
+    pointer-events: none;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.lyric-bubble-year {
+    font-size: 8px;
+    fill: rgba(255,255,255,0.5);
+    text-anchor: middle;
+    pointer-events: none;
+}
+
+.lyric-flow-axis text {
+    font-size: 10px;
+    fill: rgba(255,255,255,0.4);
+}
+
+.lyric-flow-axis path, .lyric-flow-axis line {
+    stroke: rgba(255,255,255,0.05);
+}
+
+/* Mini Word Cloud (Tooltip) Styling */
+.mini-cloud-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 8px 0;
+    max-width: 280px;
+}
+
+.mini-cloud-word {
+    transition: transform 0.2s ease, filter 0.2s ease;
+    white-space: nowrap;
+}
+
+.mini-cloud-word:hover {
+    transform: scale(1.1);
+    filter: brightness(1.3);
+}
+
+.scrub-line {
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
