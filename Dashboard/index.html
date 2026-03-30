@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify Audio Features Dashboard</title>
+    <!-- Dark Mode / Premium CSS -->
+    <link rel="stylesheet" href="style.css">
+    <!-- D3.js -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <!-- D3 Cloud for Word Cloud -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-cloud/1.2.7/d3.layout.cloud.min.js"></script>
+</head>
+
+<body>
+    <header class="glass-header"
+        style="display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 20px; padding: 15px 30px; flex-wrap: nowrap; overflow: hidden;">
+
+        <!-- Left: Title (Flushed Left) -->
+        <div class="header-title-block"
+            style="flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start; text-align: left;">
+            <h1 style="margin: 0; font-size: 1.8rem;">Spotify Tracks Analysis</h1>
+            <p style="margin: 2px 0 0 0; color: var(--text-secondary); font-size: 0.85rem;">Top 300 Global Streams &
+                Audio Features</p>
+        </div>
+
+        <!-- Middle: Slider -->
+        <div class="global-filters"
+            style="flex: 1 1 auto; display: flex; justify-content: center; align-items: center; margin: 0; min-width: 0;">
+            <div
+                style="display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.2); padding: 8px 15px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); white-space: nowrap;">
+                <label for="yearSlider" style="margin: 0; font-size: 0.95rem;">Year: <span id="yearLabel"
+                        style="font-weight: bold; color: var(--accent);">All Time</span></label>
+                <button class="btn btn-icon" id="yearPrevBtn" style="margin: 0;">&lt;</button>
+                <input type="range" id="yearSlider" step="1" style="width: 250px; margin: 0;">
+                <button class="btn btn-icon" id="yearNextBtn" style="margin: 0;">&gt;</button>
+                <button class="btn btn-icon" id="yearPlayBtn" style="background:#10b981; margin: 0;">▶</button>
+                <button class="btn" id="resetYearBtn" style="margin: 0;">All Time</button>
+            </div>
+        </div>
+
+        <!-- Right: Player Preview (Flushed Right) -->
+        <div
+            style="flex: 0 0 350px; height: 80px; display: flex; justify-content: flex-end; align-items: center; position: relative;">
+            <div id="spotifyEmbedContainer"
+                style="width: 350px; height: 80px; border-radius: 12px; overflow: hidden; display: none; position: absolute; right: 0;">
+                <iframe id="spotifyIframe" src="" width="100%" height="80" frameborder="0" allowtransparency="true"
+                    allow="encrypted-media"></iframe>
+            </div>
+
+            <div id="spotifyEmbedPlaceholder"
+                style="width: 350px; height: 80px; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.2); border-radius: 12px; border: 1px dashed rgba(255,255,255,0.1); color: var(--text-secondary); font-size: 0.9rem; position: absolute; right: 0;">
+                Select a track to preview
+            </div>
+        </div>
+
+    </header>
+
+    <div class="dashboard-container">
+        <!-- Sidebar: Radar & Bubble Chart -->
+        <aside class="sidebar glass-panel">
+            <div class="chart-header">
+                <h2>Studio Mixing Board</h2>
+                <p class="subtitle" style="font-size: 0.8rem; margin-bottom: 12px;">Drag the faders to filter top hits
+                    by exact sonic intensity. The 'Sweet Spot' heat map will morph to show where your custom sound
+                    succeeds.</p>
+                <button id="resetMixerBtn" class="btn"
+                    style="width: 100%; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.4); font-size: 0.8rem; letter-spacing: 1px; text-transform: uppercase;">Reset
+                    All Faders</button>
+            </div>
+            <div id="mixerContainer"
+                style="width: 100%; height: 280px; display: flex; justify-content: space-around; padding: 20px 0 30px 0; border-bottom: 1px solid rgba(255,255,255,0.05); margin-bottom: 30px;">
+                <!-- D3 Faders -->
+            </div>
+
+            <div class="chart-header">
+                <h2>Audio Features Radar</h2>
+            </div>
+            <div class="radar-legend">
+                <div class="legend-item">
+                    <div class="color-box avg"></div> <span id="radarAvgLabel">Filtered Average</span>
+                </div>
+                <div class="legend-item">
+                    <div class="color-box sel"></div> <span id="radarSelectedLabel">Selected Track</span>
+                </div>
+            </div>
+            <div id="radarChartContainer"></div>
+
+            <div class="chart-header" style="margin-top: 30px;">
+                <h2>Artist & Song Explorer</h2>
+                <p class="subtitle" style="font-size: 0.8rem;">Artists are sized by total top tracks. Click an artist to
+                    reveal their songs.</p>
+            </div>
+            <div id="bubbleChartContainer" style="margin-bottom: 20px;"></div>
+
+            <div class="chart-header" style="margin-top: 30px;">
+                <h2>Musical Key Anatomy</h2>
+                <p class="subtitle" style="font-size: 0.8rem;">Keys sized by popularity. Click a key to dive into its
+                    tracks. Mode (Teal=Major, Rose=Minor), Intensity (Opacity=Sentiment).</p>
+            </div>
+
+            <div id="keyChartLegend"
+                style="background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); padding: 5px 10px; margin-bottom: 5px; font-size: 0.75rem; display: flex; justify-content: space-between; align-items: center; color: rgba(255,255,255,0.7);">
+                <div style="display:flex; gap:8px;">
+                    <div><span
+                            style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#2dd4bf;"></span>
+                        Major</div>
+                    <div><span
+                            style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#fb7185;"></span>
+                        Minor</div>
+                </div>
+                <div><span style="opacity:1; font-weight:bold;">Solid</span>=Happy ↔ <span
+                        style="opacity:0.3;">Faded</span>=Sad</div>
+            </div>
+
+            <div id="keyChartContainer"
+                style="width: 100%; aspect-ratio: 1; min-height: 250px; background: rgba(0,0,0,0.1); border-radius: 12px; margin-bottom: 20px; overflow: hidden; position: relative;">
+                <button id="keyChartBackBtn" class="btn"
+                    style="position: absolute; top: 8px; left: 8px; display: none; padding: 4px 8px; font-size: 0.7rem; z-index: 10;">&larr;
+                    Back to Keys</button>
+            </div>
+
+            <div class="chart-header" style="margin-top: 20px;">
+                <h2>Top 10 Artists (Bar Race)</h2>
+                <p class="subtitle" style="font-size: 0.8rem;">Watch how the streaming giants rise and fall over time by
+                    playing the Timeline.</p>
+            </div>
+            <div id="artistBarChartContainer" style="width: 100%; height: 320px;"></div>
+
+            <div class="chart-header"
+                style="margin-top: 30px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 20px;">
+                <h2>Lyrical DNA (Timeline Word Cloud)</h2>
+                <p class="subtitle" style="font-size: 0.8rem;">The most frequently occurring lyric words in Top hits.
+                    Updates dynamically as you shift through the years.</p>
+            </div>
+            <div id="wordCloudContainer"
+                style="width: 100%; height: 300px; background: rgba(0,0,0,0.15); border-radius: 12px; position: relative; margin-bottom: 10px;">
+                <!-- Word Cloud D3 injected here -->
+            </div>
+
+            <div class="chart-header" style="margin-top: 10px; padding: 0;">
+                <h3 style="font-size: 0.9rem; margin-bottom: 5px; opacity: 0.8;">Category Distribution</h3>
+            </div>
+            <div id="wordCategoryBarContainer" style="width: 100%; height: 260px; background: rgba(0,0,0,0.05); border-radius: 12px; position: relative; padding: 10px;">
+                <!-- Bar Chart D3 injected here -->
+                <div style="position: absolute; bottom: 8px; left: 0; right: 0; text-align: center; font-size: 0.65rem; color: rgba(255,255,255,0.4); pointer-events: none; font-style: italic;">
+                    * Note: Common uncategorized words (Other) are excluded.
+                </div>
+            </div>
+        </aside>
+
+        <!-- Drag-to-resize handle -->
+        <div class="resizer" id="panelResizer"></div>
+
+        <!-- Main Content: Scatter Grids -->
+        <main class="main-content glass-panel" style="margin-left: 14px;">
+
+            <div class="chart-header" style="margin-bottom: 20px;">
+                <h2>Dimensional Plotter (2D Correlations Map)</h2>
+                <p class="subtitle">Compare two feature combinations side by side. Bubble size encodes a third
+                    dimension.</p>
+            </div>
+
+            <!-- Dual Scatterplot Row -->
+            <div style="display: flex; gap: 20px; margin-bottom: 40px; align-items: flex-start;">
+
+                <!-- Chart A -->
+                <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px;">
+                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <label
+                            style="font-size: 0.8rem; margin: 0; display: flex; align-items: center; gap: 5px; color: var(--text-secondary);">X:
+                            <select id="bubbleXSelectA" style="padding: 4px 8px; font-size: 0.8rem;"></select>
+                        </label>
+                        <label
+                            style="font-size: 0.8rem; margin: 0; display: flex; align-items: center; gap: 5px; color: var(--text-secondary);">Y:
+                            <select id="bubbleYSelectA" style="padding: 4px 8px; font-size: 0.8rem;"></select>
+                        </label>
+                        <label
+                            style="font-size: 0.8rem; margin: 0; display: flex; align-items: center; gap: 5px; color: var(--text-secondary);">Size:
+                            <select id="bubbleSizeSelectA" style="padding: 4px 8px; font-size: 0.8rem;"></select>
+                        </label>
+                    </div>
+                    <div id="featureBubbleChartA"
+                        style="width: 100%; aspect-ratio: 1/1; background: rgba(0,0,0,0.2); border-radius: 12px; position: relative; border: 1px solid rgba(255,255,255,0.05); overflow: hidden;">
+                        <div id="bubbleStatsA"
+                            style="position: absolute; bottom: 10px; right: 10px; display: flex; gap: 8px; background: rgba(0,0,0,0.35); padding: 5px 10px; border-radius: 4px; pointer-events: none; z-index: 10;">
+                            <div style="display: flex; flex-direction: column; align-items: flex-start;">
+                                <span
+                                    style="font-size: 0.42rem; color: rgba(255,255,255,0.45); letter-spacing: 0.8px; text-transform: uppercase;">Songs</span>
+                                <strong id="bubbleStatSongsA"
+                                    style="font-size: 0.58rem; color: rgba(255,255,255,0.85); font-weight: 600;">0</strong>
+                            </div>
+                            <div style="display: flex; flex-direction: column; align-items: flex-start;">
+                                <span
+                                    style="font-size: 0.42rem; color: rgba(255,255,255,0.45); letter-spacing: 0.8px; text-transform: uppercase;">Avg
+                                    <span id="bubbleStatXLabelA">X</span></span>
+                                <strong id="bubbleStatXA"
+                                    style="font-size: 0.58rem; color: rgba(255,255,255,0.85); font-weight: 600;">0.00</strong>
+                            </div>
+                            <div style="display: flex; flex-direction: column; align-items: flex-start;">
+                                <span
+                                    style="font-size: 0.42rem; color: rgba(255,255,255,0.45); letter-spacing: 0.8px; text-transform: uppercase;">Avg
+                                    <span id="bubbleStatYLabelA">Y</span></span>
+                                <strong id="bubbleStatYA"
+                                    style="font-size: 0.58rem; color: rgba(255,255,255,0.85); font-weight: 600;">0.00</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chart B -->
+                <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px;">
+                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <label
+                            style="font-size: 0.8rem; margin: 0; display: flex; align-items: center; gap: 5px; color: var(--text-secondary);">X:
+                            <select id="bubbleXSelectB" style="padding: 4px 8px; font-size: 0.8rem;"></select>
+                        </label>
+                        <label
+                            style="font-size: 0.8rem; margin: 0; display: flex; align-items: center; gap: 5px; color: var(--text-secondary);">Y:
+                            <select id="bubbleYSelectB" style="padding: 4px 8px; font-size: 0.8rem;"></select>
+                        </label>
+                        <label
+                            style="font-size: 0.8rem; margin: 0; display: flex; align-items: center; gap: 5px; color: var(--text-secondary);">Size:
+                            <select id="bubbleSizeSelectB" style="padding: 4px 8px; font-size: 0.8rem;"></select>
+                        </label>
+                    </div>
+                    <div id="featureBubbleChartB"
+                        style="width: 100%; aspect-ratio: 1/1; background: rgba(0,0,0,0.2); border-radius: 12px; position: relative; border: 1px solid rgba(255,255,255,0.05); overflow: hidden;">
+                        <div id="bubbleStatsB"
+                            style="position: absolute; bottom: 10px; right: 10px; display: flex; gap: 8px; background: rgba(0,0,0,0.35); padding: 5px 10px; border-radius: 4px; pointer-events: none; z-index: 10;">
+                            <div style="display: flex; flex-direction: column; align-items: flex-start;">
+                                <span
+                                    style="font-size: 0.42rem; color: rgba(255,255,255,0.45); letter-spacing: 0.8px; text-transform: uppercase;">Songs</span>
+                                <strong id="bubbleStatSongsB"
+                                    style="font-size: 0.58rem; color: rgba(255,255,255,0.85); font-weight: 600;">0</strong>
+                            </div>
+                            <div style="display: flex; flex-direction: column; align-items: flex-start;">
+                                <span
+                                    style="font-size: 0.42rem; color: rgba(255,255,255,0.45); letter-spacing: 0.8px; text-transform: uppercase;">Avg
+                                    <span id="bubbleStatXLabelB">X</span></span>
+                                <strong id="bubbleStatXB"
+                                    style="font-size: 0.58rem; color: rgba(255,255,255,0.85); font-weight: 600;">0.00</strong>
+                            </div>
+                            <div style="display: flex; flex-direction: column; align-items: flex-start;">
+                                <span
+                                    style="font-size: 0.42rem; color: rgba(255,255,255,0.45); letter-spacing: 0.8px; text-transform: uppercase;">Avg
+                                    <span id="bubbleStatYLabelB">Y</span></span>
+                                <strong id="bubbleStatYB"
+                                    style="font-size: 0.58rem; color: rgba(255,255,255,0.85); font-weight: 600;">0.00</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- RADIAL PLOT TEMPORARILY DISABLED
+            <div class="chart-header" style="border-top: 1px solid rgba(255,255,255,0.05); padding-top: 30px;">
+                <h2>The Musical Approach (Radial Plot)</h2>
+                <p class="subtitle">Tracks mapped to a clock face by Key (C at 12 o'clock). Distance from center encodes Sentiment Score (Sad to Euphoric). Color: Yellow = Major, Purple = Minor.</p>
+            </div>
+            <div id="radialChartContainer"
+                style="width: 100%; height: 600px; background: rgba(0,0,0,0.2); border-radius: 12px; margin-bottom: 40px; position: relative; border: 1px solid rgba(255,255,255,0.05); overflow: hidden;">
+                <!- - Radial chart will be injected here - ->
+            </div>
+            -->
+
+            <div class="chart-header" style="border-top: 1px solid rgba(255,255,255,0.05); padding-top: 30px;">
+                <h2>Features vs Streams</h2>
+                <p class="subtitle">Click any point to view that track's radar signatures. Y-Axis = Features, X-Axis =
+                    Streams (Millions)</p>
+            </div>
+
+            <div id="featureToggles" class="feature-toggles">
+                <!-- buttons will be appended here via D3 -->
+            </div>
+
+            <div id="scatterGrid" class="scatter-grid">
+                <!-- Small multiples rendered dynamically -->
+            </div>
+
+            <div class="chart-header"
+                style="margin-top: 40px; border-top: 1px solid var(--glass-border); padding-top: 20px;">
+                <h2 id="trendHeader">Music Industry Evolution</h2>
+                <p class="subtitle">Observe the macroscopic shift of popular music feature characteristics across a
+                    decade.</p>
+            </div>
+            <div style="position: relative;">
+                <!-- Milestone Toggle (Top Right of Chart Container) -->
+                <div style="position: absolute; top: -35px; right: 0; z-index: 1000; display: flex; align-items: center; gap: 8px; background: rgba(30, 41, 59, 0.4); padding: 4px 10px; border-radius: 20px; backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.08);">
+                    <span style="font-size: 0.7rem; color: var(--text-secondary); font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase;">Timeline Events</span>
+                    <label class="switch">
+                        <input id="milestoneToggleInput" type="checkbox" checked onchange="toggleIndustryEvents()">
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+
+                <div id="unifiedTrendChart"
+                    style="width: 100%; height: 550px; background: rgba(0,0,0,0.2); border-radius: 12px; margin-bottom: 40px; position: relative; border: 1px solid rgba(255,255,255,0.05);">
+                    <!-- Unified Line chart rendered dynamically -->
+                </div>
+            </div>
+
+            <div class="chart-header"
+                style="margin-top: 40px; border-top: 1px solid var(--glass-border); padding-top: 20px;">
+                <h2>Feature Density Distribution (Ridgeline)</h2>
+                <p class="subtitle">Observe the macroscopic distribution curves of the selected features for the current
+                    dataset.</p>
+            </div>
+            <div id="ridgelineChart"
+                style="width: 100%; height: 800px; background: rgba(0,0,0,0.2); border-radius: 12px; margin-bottom: 40px; border: 1px solid rgba(255,255,255,0.05); position: relative;">
+                <!-- Ridgeline chart rendered dynamically -->
+            </div>
+
+            <div class="chart-header"
+                style="margin-top: 40px; border-top: 1px solid var(--glass-border); padding-top: 20px;">
+                <h2>Multidimensional Audio Profile (Parallel Coordinates)</h2>
+                <p class="subtitle">Trace the exact sonic recipe of individual tracks across all 12 features
+                    simultaneously.</p>
+            </div>
+            <div id="parallelChartContainer"
+                style="width: 100%; height: 500px; background: rgba(0,0,0,0.2); border-radius: 12px; margin-bottom: 40px; border: 1px solid rgba(255,255,255,0.05); overflow: hidden;">
+                <!-- Parallel Coordinates rendered dynamically -->
+            </div>
+        </main>
+    </div>
+
+    <!-- Tooltip -->
+    <div id="tooltip" class="glass-tooltip" style="opacity: 0;"></div>
+
+    <!-- App Logic -->
+    <script src="app.js"></script>
+</body>
+
+</html>
