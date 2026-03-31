@@ -3,6 +3,7 @@ let originalDataset = [];
 let dataset = [];
 let globalAverages = {};
 let selectedTrack = null;
+let selectedTopic = null;
 let globalAnimationDuration = 0;
 let minYear;
 let maxYear;
@@ -81,7 +82,7 @@ let wordcloudDataset = [];
 
 Promise.all([
     d3.csv("data/masterlist_lyrics_with_features_cleaned_top300_final.csv"),
-    d3.csv("data/wordcloud_data_by_year.csv")
+    d3.csv("data/wordcloud_data_by_year_updated.csv")
 ]).then(([data, wordData]) => {
     wordData.forEach(d => {
         d.Year = parseInt(d.Year) || 0;
@@ -203,7 +204,49 @@ Promise.all([
     initWordCloud();
     initWordCategoryBarChart();
     initLyricEvolutionChart();
+    initTopicEvolutionChart();
     initMixer();
+
+    // Sidebar Resizer Logic
+    const resizer = document.getElementById("panelResizer");
+    const dashContainer = document.querySelector(".dashboard-container");
+    if (resizer) {
+        let isResizing = false;
+        resizer.addEventListener("mousedown", (e) => {
+            isResizing = true;
+            resizer.classList.add("dragging");
+            document.body.style.cursor = "col-resize";
+            document.body.style.userSelect = "none";
+        });
+        window.addEventListener("mousemove", (e) => {
+            if (!isResizing) return;
+            const newWidth = Math.max(300, Math.min(1000, e.clientX - 20)); // Adjust for body padding
+            document.documentElement.style.setProperty("--sidebar-w", newWidth + "px");
+        });
+        window.addEventListener("mouseup", () => {
+            if (isResizing) {
+                isResizing = false;
+                resizer.classList.remove("dragging");
+                document.body.style.cursor = "default";
+                document.body.style.userSelect = "auto";
+                // Debounced update for charts
+                updateDashboard();
+                initRadarChart();
+                initBubbleChart();
+                initArtistBarChart();
+                updateTrendLines();
+                initKeyChart();
+                updateWordCloud();
+                updateWordCategoryBarChart();
+                updateLyricEvolutionChart();
+                updateTopicEvolutionChart();
+                initFeatureBubbleChart();
+                initDistributionCurves();
+                initRidgeline();
+                initParallelChart();
+            }
+        });
+    }
 }).catch(err => {
     console.error("Error loading CSV file:", err);
 });
@@ -259,10 +302,26 @@ function filterByYear(year, animated = false) {
 }
 
 let filterDebounceTimer;
+function clearTopicFilter() {
+    selectedTopic = null;
+    applyFilters();
+}
+
+window.clearLyricalFilter = function() {
+    selectedWordCategory = null;
+    updateWordCloud();
+    updateWordCategoryBarChart();
+    updateLyricEvolutionChart();
+    applyFilters();
+};
+
 function applyFilters() {
     let baseData = selectedYear === null ? originalDataset : originalDataset.filter(d => d.Year === selectedYear);
 
     dataset = baseData.filter(d => {
+        // Topic drill-down filter
+        if (selectedTopic && d.Topic !== selectedTopic) return false;
+
         for (let key in mixerFilters) {
             if (mixerFilters[key] !== null) {
                 let normData = normalize(d[key], featureStats[key].min, featureStats[key].max);
@@ -275,6 +334,28 @@ function applyFilters() {
         }
         return true;
     });
+
+    // Update Topic indicator UI if it exists
+    const topicDisplay = d3.select("#activeTopicIndicator");
+    const sidebarResetBtn = d3.select("#bubbleResetBtn");
+
+    if (!topicDisplay.empty()) {
+        topicDisplay.style("display", selectedTopic ? "flex" : "none");
+        const displayYear = selectedYear || "All Time";
+        d3.select("#activeTopicName").text(`${selectedTopic} (${displayYear})`);
+    }
+
+    if (!sidebarResetBtn.empty()) {
+        sidebarResetBtn.style("display", selectedTopic ? "block" : "none");
+    }
+
+    // Support Lyrical Indicator
+    const lyricalDisplay = d3.select("#activeLyricalIndicator");
+    if (!lyricalDisplay.empty()) {
+        lyricalDisplay.style("display", selectedWordCategory ? "flex" : "none");
+        const displayYear = selectedYear || "All Time";
+        d3.select("#activeLyricalName").text(`${selectedWordCategory} (${displayYear})`);
+    }
 
     computeStats();
 
@@ -290,6 +371,7 @@ function applyFilters() {
         updateWordCloud();
         updateWordCategoryBarChart();
         updateLyricEvolutionChart();
+        updateTopicEvolutionChart();
     }, 10);
 }
 
@@ -320,6 +402,7 @@ function updateDashboard() {
     updateWordCloud();
     updateWordCategoryBarChart();
     updateLyricEvolutionChart();
+    updateTopicEvolutionChart();
     updateMixer();
 }
 
@@ -424,11 +507,18 @@ function initOneBubbleChart(cfg) {
     const size = containerNode.clientWidth - margin.left - margin.right;
     containerNode.style.height = (size + margin.top + margin.bottom) + 'px';
 
-    const svg = d3.select('#' + cfg.containerId).append('svg')
+    d3.select('#' + cfg.containerId).selectAll("svg").remove();
+    const rootSvg = d3.select('#' + cfg.containerId).append('svg')
         .attr('width', size + margin.left + margin.right)
         .attr('height', size + margin.top + margin.bottom)
         .style('display', 'block')
-        .append('g')
+        .on('click', function () {
+            selectedTrack = null;
+            d3.select("#songDropdown").property("value", "");
+            updateDashboard();
+        });
+
+    const svg = rootSvg.append('g')
         .attr('transform', `translate(${margin.left},${margin.top})`);
 
     cfg.svg = svg;
@@ -451,7 +541,7 @@ function initOneBubbleChart(cfg) {
 
     cfg.gridGroup = svg.append('g').attr('class', 'grid-group');
 
-    // Bottom-most level: Invisible overlay for deselecting + quadrant tracking
+    // Bottom-most level: Invisible overlay for deselecting + quadrant tracking — click listener is now on rootSvg
     svg.append('rect')
         .attr('class', 'bubble-overlay')
         .attr('width', size).attr('height', size)
@@ -579,7 +669,7 @@ function updateOneBubbleChart(cfg) {
                 .attr('text-anchor', anchor)
                 .style('fill', 'rgba(255,255,255,0.35)')
                 .style('transition', 'none')
-                .style('font-size', '13px')
+                .style('font-size', '10px')
                 .style('font-weight', '900')
                 .style('letter-spacing', '1.5px')
                 .style('text-transform', 'uppercase')
@@ -588,14 +678,13 @@ function updateOneBubbleChart(cfg) {
 
             const handleMouseOver = () => {
                 rect.style('opacity', 0.15);
-                text.style('fill', 'rgba(255,255,255,1)').style('font-size', '14px');
+                text.style('fill', qData.color).style('font-size', '11px');
             };
             const handleMouseOut = () => {
                 rect.style('opacity', 0);
-                text.style('fill', 'rgba(255,255,255,0.35)').style('font-size', '13px');
+                text.style('fill', 'rgba(255,255,255,0.35)').style('font-size', '10px');
             };
 
-            rect.on('mouseover', handleMouseOver).on('mouseout', handleMouseOut);
             text.on('mouseover', handleMouseOver).on('mouseout', handleMouseOut);
 
             cfg.quadrantLabels[id] = { text, rect, color: qData.color };
@@ -623,7 +712,7 @@ function updateOneBubbleChart(cfg) {
         .style('opacity', 0.55).style('cursor', 'pointer')
         .on('mouseover', function (event, d) {
             d3.select(this).raise().style('stroke-width', 2.5).style('opacity', 1);
-            
+
             // Focus effect: Dim all other bubbles aggressively
             cfg.dotGroup.selectAll('.feature-bubble')
                 .filter(p => p.Title !== d.Title)
@@ -662,6 +751,7 @@ function updateOneBubbleChart(cfg) {
             tTip.transition().duration(500).style('opacity', 0);
         })
         .on('click', function (event, d) {
+            event.stopPropagation();
             selectedTrack = (selectedTrack && selectedTrack.Title === d.Title) ? null : d;
             updateDashboard();
         })
@@ -784,6 +874,7 @@ function initDistributionCurves() {
         const curveArea = svg.append("path").attr("class", "curve-area").attr("fill", "var(--accent)").attr("opacity", 0.2);
         const curveLine = svg.append("path").attr("class", "curve-line").attr("fill", "none").attr("stroke", "var(--accent)").attr("stroke-width", "2.5px");
         const sweetSpotGroup = svg.append("g").attr("class", "sweet-spot-group");
+        const songHighlightGroup = svg.append("g").attr("class", "song-highlight-group");
 
         // Vertical Crosshair and Focal Point
         const crosshair = svg.append("line").attr("class", "dist-crosshair").attr("stroke", "rgba(255,255,255,0.4)").attr("stroke-width", "1px").attr("y1", 0).attr("y2", height).style("opacity", 0).style("pointer-events", "none");
@@ -827,7 +918,7 @@ function initDistributionCurves() {
                 d3.select("#tooltip").transition().duration(500).style("opacity", 0);
             });
 
-        distributionCharts[feature] = { svg, x, y, xAxis, yAxis, curveArea, curveLine, sweetSpotGroup, width, height };
+        distributionCharts[feature] = { svg, x, y, xAxis, yAxis, curveArea, curveLine, sweetSpotGroup, songHighlightGroup, width, height };
     });
 
     updateDistributionCurves();
@@ -913,6 +1004,53 @@ function updateDistributionCurves() {
                         .style("top", (event.pageY - 28) + "px");
                 })
                 .on("mouseout", () => d3.select("#tooltip").transition().duration(500).style("opacity", 0));
+        }
+
+        // --- Selection Highlight Logic ---
+        chart.songHighlightGroup.selectAll("*").remove();
+        if (selectedTrack && !isNaN(+selectedTrack[feature])) {
+            const trackVal = +selectedTrack[feature];
+            const sx = chart.x(trackVal);
+
+            // Find density at this point to place the circle exactly on the curve
+            const density = chart.currentDensity;
+            const bisect = d3.bisector(d => d[0]).left;
+            const idx = bisect(density, trackVal);
+            const d = density[idx] || density[density.length - 1];
+            const sy = chart.y(d[1]);
+
+            // Vertical Marker
+            chart.songHighlightGroup.append("line")
+                .attr("x1", sx).attr("x2", sx)
+                .attr("y1", sy).attr("y2", chart.height)
+                .attr("stroke", "#ff4444")
+                .attr("stroke-width", "2px")
+                .style("stroke-dasharray", "2,2")
+                .style("opacity", 0)
+                .transition().duration(500).style("opacity", 0.6);
+
+            // Focal Circle
+            chart.songHighlightGroup.append("circle")
+                .attr("cx", sx).attr("cy", sy)
+                .attr("r", 0)
+                .attr("fill", "#ff4444")
+                .attr("stroke", "#fff")
+                .attr("stroke-width", "2px")
+                .style("filter", "drop-shadow(0 0 5px #ff4444)")
+                .transition().duration(600).ease(d3.easeElasticOut).attr("r", 6);
+
+            // Label
+            chart.songHighlightGroup.append("text")
+                .attr("x", sx)
+                .attr("y", sy - 12)
+                .attr("text-anchor", "middle")
+                .style("fill", "#fff")
+                .style("font-size", "10px")
+                .style("font-weight", "bold")
+                .style("text-shadow", "0 2px 4px rgba(0,0,0,0.8)")
+                .text(d3.format(".2f")(trackVal))
+                .style("opacity", 0)
+                .transition().duration(500).style("opacity", 1);
         }
     });
 }
@@ -1245,19 +1383,27 @@ function updateScatterPlots() {
 --------------------------------------------------------- */
 let radarSvg, radarConfig;
 
+function shortenLabel(str) {
+    if (str === 'Instrumentalness') return 'Instr.';
+    if (str === 'Danceability') return 'Dance.';
+    if (str === 'Acousticness') return 'Acoustic.';
+    if (str === 'Speechiness') return 'Speech.';
+    return str;
+}
+
 function initRadarChart() {
     radarConfig = {
         w: 250,
-        h: 250,
-        margin: { top: 40, right: 60, bottom: 40, left: 60 },
-        levels: 5,
+        h: 275, // Increased height for legend and clarity
+        margin: { top: 70, right: 80, bottom: 40, left: 80 },
+        levels: 4, // Cleaner look
         maxValue: 1,
         labelFactor: 1.25,
-        opacityArea: 0.35,
-        dotRadius: 4,
-        opacityCircles: 0.1,
+        opacityArea: 0.4,
+        dotRadius: 4.5,
+        opacityCircles: 0.08,
         strokeWidth: 2,
-        roundStrokes: false
+        roundStrokes: false // Sharp edges restored as per request
     };
     buildRadarLayout();
     updateRadarChart();
@@ -1266,7 +1412,7 @@ function initRadarChart() {
 function buildRadarLayout() {
     const container = document.getElementById("radarChartContainer");
     radarConfig.w = Math.min(container.clientWidth - radarConfig.margin.left - radarConfig.margin.right, 450);
-    radarConfig.h = radarConfig.w;
+    radarConfig.h = radarConfig.w * 1.1; // Increased height slightly for better vertical clearance
 
     d3.select("#radarChartContainer").select("svg").remove();
 
@@ -1274,7 +1420,27 @@ function buildRadarLayout() {
         .append("svg")
         .attr("width", radarConfig.w + radarConfig.margin.left + radarConfig.margin.right)
         .attr("height", radarConfig.h + radarConfig.margin.top + radarConfig.margin.bottom)
-        .append("g")
+        .attr("viewBox", `0 0 ${radarConfig.w + radarConfig.margin.left + radarConfig.margin.right} ${radarConfig.h + radarConfig.margin.top + radarConfig.margin.bottom}`)
+        .style("overflow", "visible");
+
+    // Add SVG Filters for Glow
+    const defs = radarSvg.append("defs");
+    
+    // Selection Glow
+    const filterSelect = defs.append("filter").attr("id", "radarSelectionGlow").attr("height", "300%").attr("width", "300%").attr("x", "-100%").attr("y", "-100%");
+    filterSelect.append("feGaussianBlur").attr("stdDeviation", "4.5").attr("result", "coloredBlur");
+    const feMergeSelect = filterSelect.append("feMerge");
+    feMergeSelect.append("feMergeNode").attr("in", "coloredBlur");
+    feMergeSelect.append("feMergeNode").attr("in", "SourceGraphic");
+
+    // Standard Glow
+    const filterStd = defs.append("filter").attr("id", "radarStdGlow");
+    filterStd.append("feGaussianBlur").attr("stdDeviation", "2").attr("result", "blur");
+    const feMergeStd = filterStd.append("feMerge");
+    feMergeStd.append("feMergeNode").attr("in", "blur");
+    feMergeStd.append("feMergeNode").attr("in", "SourceGraphic");
+
+    radarSvg = radarSvg.append("g")
         .attr("transform", "translate(" + (radarConfig.w / 2 + radarConfig.margin.left) + "," + (radarConfig.h / 2 + radarConfig.margin.top) + ")");
 }
 
@@ -1315,19 +1481,20 @@ function drawRadarChart(data) {
 
     radarSvg.selectAll(".radarWrapper").remove();
     radarSvg.selectAll(".axisWrapper").remove();
+    radarSvg.selectAll(".legendBadge").remove();
 
     const axisGrid = radarSvg.append("g").attr("class", "axisWrapper");
 
+    // 1. Sleek Grid (Concentric Rings)
     axisGrid.selectAll(".levels")
         .data(d3.range(1, (radarConfig.levels + 1)).reverse())
         .enter()
         .append("circle")
         .attr("class", "gridCircle")
         .attr("r", d => radius / radarConfig.levels * d)
-        .style("fill", "#CDCDCD")
-        .style("stroke", "#CDCDCD")
-        .style("fill-opacity", radarConfig.opacityCircles)
-        .style("stroke-dasharray", "4,3");
+        .style("fill", "rgba(255,255,255,0.03)")
+        .style("stroke", "rgba(255,255,255,0.12)")
+        .style("stroke-width", "0.5px");
 
     const axis = axisGrid.selectAll(".axis")
         .data(allAxis)
@@ -1335,35 +1502,37 @@ function drawRadarChart(data) {
         .append("g")
         .attr("class", "axis");
 
+    // 2. Axis Lines
     axis.append("line")
         .attr("x1", 0)
         .attr("y1", 0)
         .attr("x2", (d, i) => rScale(radarConfig.maxValue * 1.05) * Math.cos(angleSlice * i - Math.PI / 2))
         .attr("y2", (d, i) => rScale(radarConfig.maxValue * 1.05) * Math.sin(angleSlice * i - Math.PI / 2))
         .attr("class", "line")
-        .style("stroke", "rgba(255, 255, 255, 0.1)")
+        .style("stroke", "rgba(255, 255, 255, 0.08)")
         .style("stroke-width", "1px");
 
+    // 3. Axis Labels (Truncated & Uppercase)
     axis.append("text")
         .attr("class", "legend")
-        .style("font-size", "10px")
+        .style("font-size", "9px")
+        .style("font-weight", "900")
+        .style("text-transform", "uppercase")
+        .style("letter-spacing", "1px")
         .attr("text-anchor", "middle")
         .attr("dy", "0.35em")
         .attr("x", (d, i) => rScale(radarConfig.maxValue * radarConfig.labelFactor) * Math.cos(angleSlice * i - Math.PI / 2))
         .attr("y", (d, i) => rScale(radarConfig.maxValue * radarConfig.labelFactor) * Math.sin(angleSlice * i - Math.PI / 2))
-        .text(d => d)
-        .style("fill", "var(--text-primary)");
+        .text(d => shortenLabel(d))
+        .style("fill", "rgba(255,255,255,0.6)");
 
     const g = radarSvg.append("g").attr("class", "radarWrapper");
 
+    // 4. Smooth Paths (Cardinal Curves)
     const radarLine = d3.lineRadial()
-        .curve(d3.curveLinearClosed)
+        .curve(radarConfig.roundStrokes ? d3.curveCardinalClosed.tension(0.1) : d3.curveLinearClosed)
         .radius(d => rScale(d.value))
         .angle((d, i) => i * angleSlice);
-
-    if (radarConfig.roundStrokes) {
-        radarLine.curve(d3.curveCardinalClosed);
-    }
 
     const blobWrapper = g.selectAll(".radar-blob")
         .data(data)
@@ -1373,23 +1542,24 @@ function drawRadarChart(data) {
     const getStroke = (i) => i === 0 ? "var(--avg-stroke)" : "var(--sel-stroke)";
     const getFill = (i) => i === 0 ? "var(--avg-color)" : "var(--sel-color)";
 
+    // 5. Drawing Areas
     blobWrapper.append("path")
         .attr("class", "radarArea")
         .style("fill", (d, i) => getFill(i))
         .style("fill-opacity", radarConfig.opacityArea)
-        .transition().duration(globalAnimationDuration)
-        .attr("d", d => radarLine(d));
-
-    blobWrapper.selectAll(".radarArea")
+        .style("stroke", (d, i) => getStroke(i))
+        .style("stroke-width", i => i === 0 ? "1px" : "3px")
+        .style("filter", i => i === 1 ? "url(#radarSelectionGlow)" : "none")
+        .style("cursor", "pointer")
         .on('mouseover', function (event, d) {
-            d3.selectAll(".radarArea").transition().duration(200).style("fill-opacity", 0.1);
-            d3.select(this).transition().duration(200).style("fill-opacity", 0.7);
-
+            d3.selectAll(".radarArea").transition().duration(200).style("fill-opacity", 0.05);
+            d3.select(this).transition().duration(200).style("fill-opacity", 0.8);
+            
             const isAvg = d3.select(this.parentNode).datum() === data[0];
             let htmlContent = `<div class="tooltip-title" style="margin-bottom: 5px;">${isAvg ? "Average Profile" : (selectedTrack ? selectedTrack.Title : "Profile")}</div>`;
-
+            
             d.forEach(feature => {
-                const valColor = isAvg ? "#38bdf8" : "#f472b6"; // Bright sky blue / hot pink for ultra-high contrast
+                const valColor = isAvg ? "#38bdf8" : "#f472b6";
                 htmlContent += `<div style="font-size: 11px; text-transform: capitalize; margin-bottom: 2px;">
                     <span style="opacity: 0.9;">${feature.axis}:</span> 
                     <strong style="color: ${valColor}; font-size: 12px; margin-left: 4px;">${d3.format(".2f")(feature.value)}</strong>
@@ -1402,24 +1572,17 @@ function drawRadarChart(data) {
                 .transition().duration(200).style("opacity", 1);
         })
         .on('mousemove', function (event) {
-            d3.select("#tooltip")
-                .style("left", (event.pageX + 15) + "px")
-                .style("top", (event.pageY - 28) + "px");
+            d3.select("#tooltip").style("left", (event.pageX + 15) + "px").style("top", (event.pageY - 28) + "px");
         })
         .on('mouseout', function () {
             d3.selectAll(".radarArea").transition().duration(200).style("fill-opacity", radarConfig.opacityArea);
             d3.select("#tooltip").transition().duration(200).style("opacity", 0);
-        });
+        })
+        .transition().duration(800)
+        .attr("d", d => radarLine(d));
 
-    blobWrapper.append("path")
-        .attr("class", "radarStroke")
-        .attr("d", d => radarLine(d))
-        .style("stroke-width", radarConfig.strokeWidth + "px")
-        .style("stroke", (d, i) => getStroke(i))
-        .style("fill", "none");
-
+    // 6. Interaction Dots
     const tooltip = d3.select("#tooltip");
-
     blobWrapper.selectAll(".radarCircle")
         .data(d => d)
         .enter().append("circle")
@@ -1429,24 +1592,70 @@ function drawRadarChart(data) {
         .attr("cy", (d, i) => rScale(d.value) * Math.sin(angleSlice * i - Math.PI / 2))
         .style("fill", function () {
             const parentData = d3.select(this.parentNode).datum();
-            return getStroke(data.indexOf(parentData));
+            const colorIdx = data.indexOf(parentData);
+            return getStroke(colorIdx);
         })
-        .style("fill-opacity", 0.8)
+        .style("fill-opacity", 0.9)
         .on("mouseover", function (event, d) {
-            d3.select(this).attr("r", 6).style("fill", "#fff");
+            d3.select(this).attr("r", 7).style("fill", "#fff");
             tooltip.transition().duration(200).style("opacity", 1);
             tooltip.html(`
                 <div class="tooltip-title">${d.axis.charAt(0).toUpperCase() + d.axis.slice(1)}</div>
-                <div>Actual Value: <strong>${d3.format(".2f")(d.originalValue)}</strong></div>
+                <div>Intensity Score: <strong>${d3.format(".2f")(d.value)}</strong></div>
+                <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Actual: ${d3.format(".2f")(d.originalValue)}</div>
             `)
                 .style("left", (event.pageX + 15) + "px")
                 .style("top", (event.pageY - 28) + "px");
         })
-        .on("mouseout", function (event, d) {
+        .on("mouseout", function () {
             const parentData = d3.select(this.parentNode).datum();
             d3.select(this).attr("r", radarConfig.dotRadius).style("fill", getStroke(data.indexOf(parentData)));
             tooltip.transition().duration(500).style("opacity", 0);
         });
+
+    // 7. INTEGRATED HORIZONTAL LEGEND BADGE
+    const legendG = radarSvg.append("g")
+        .attr("class", "legendBadge")
+        .attr("transform", `translate(${-radarConfig.w/2 - 10}, ${-radarConfig.h/2 - 65})`);
+
+    const legendData = [
+        { label: "Average", color: "var(--avg-stroke)" },
+        { label: "Selected Track", color: "var(--sel-stroke)" }
+    ];
+
+    let currentX = 0;
+    legendData.filter((d, i) => i === 0 || selectedTrack).forEach((d, i) => {
+        const item = legendG.append("g").attr("transform", `translate(${currentX}, 0)`);
+        
+        // Match pill width to text (80px for Average, 115px for Selected Track)
+        const pillW = d.label === "Average" ? 75 : 115;
+
+        item.append("rect")
+            .attr("width", pillW)
+            .attr("height", 16)
+            .attr("rx", 8)
+            .style("fill", "rgba(0,0,0,0.35)")
+            .style("stroke", "rgba(255,255,255,0.08)");
+
+        item.append("circle")
+            .attr("cx", 8)
+            .attr("cy", 8)
+            .attr("r", 4.5)
+            .style("fill", d.color)
+            .style("filter", i === 1 ? "url(#radarStdGlow)" : "none");
+
+        item.append("text")
+            .attr("x", 18)
+            .attr("y", 12)
+            .style("font-size", "8.5px")
+            .style("font-weight", "900")
+            .style("text-transform", "uppercase")
+            .style("letter-spacing", "0.5px")
+            .style("fill", "rgba(255,255,255,0.85)")
+            .text(d.label);
+            
+        currentX += pillW + 10; // Tight, dynamic spacing
+    });
 }
 
 /* ---------------------------------------------------------
@@ -1463,7 +1672,12 @@ function initBubbleChart() {
     const svg = d3.select("#bubbleChartContainer").append("svg")
         .attr("viewBox", `0 0 ${width} ${height}`)
         .style("display", "block")
-        .style("background", "transparent");
+        .style("background", "transparent")
+        .on("click", function () {
+            selectedTrack = null;
+            d3.select("#songDropdown").property("value", "");
+            updateDashboard();
+        });
 
     const g = svg.append("g");
 
@@ -1496,24 +1710,27 @@ function initBubbleChart() {
             .attr("transform", d => `translate(${d.x},${d.y})`)
             .style("cursor", "pointer")
             .on("click", (event, d) => {
+                event.stopPropagation();
                 renderSongs(d.data);
             });
 
         node.append("circle")
-            .attr("r", d => d.r)
+            .attr("r", 0) // Start at zero for entrance animation
             .attr("class", d => "bubble-node-" + safeId(d.data.name))
             .style("fill", d => colorScale(d.data.name))
             .style("opacity", 0.75)
-            .attr("stroke", "#fff")
-            .attr("stroke-width", 1)
             .on("mouseover", function (event, d) {
-                d3.select(this).style("opacity", 1).attr("stroke-width", 2);
+                d3.select(this).transition().duration(200).style("opacity", 1).attr("r", (d.r * 1.02) * 1.05);
                 d3.selectAll(".bar-node-" + safeId(d.data.name)).select("rect").style("filter", "brightness(1.5)");
             })
             .on("mouseout", function (event, d) {
-                d3.select(this).style("opacity", 0.75).attr("stroke-width", 1);
+                d3.select(this).transition().duration(200).style("opacity", 0.75).attr("r", d.r * 1.02);
                 d3.selectAll(".bar-node-" + safeId(d.data.name)).select("rect").style("filter", "none");
-            });
+            })
+            .transition().duration(600)
+            .delay((d, i) => i * 12)
+            .ease(d3.easeElasticOut.amplitude(1.1).period(0.6))
+            .attr("r", d => d.r * 1.02); // Maximum impact scale for artists
 
         const tooltip = d3.select("#tooltip");
         node.on("mousemove", function (event, d) {
@@ -1530,13 +1747,16 @@ function initBubbleChart() {
         });
 
         node.append("text")
-            .style("font-size", d => Math.min(14, d.r / 3 + 2) + "px")
+            .style("font-size", d => Math.min(14, (d.r * 1.02) / 3 + 2) + "px")
             .style("fill", "#fff")
+            .style("font-weight", "900")
             .style("text-anchor", "middle")
-            .style("text-shadow", "1px 1px 2px #000")
             .style("pointer-events", "none")
             .attr("dy", "0.3em")
-            .text(d => d.data.name.length > Math.max(d.r / 3, 5) ? d.data.name.substring(0, Math.max(d.r / 3, 5)) + ".." : d.data.name);
+            .text(d => d.data.name.length > Math.max(d.r / 3, 5) ? d.data.name.substring(0, Math.max(d.r / 3, 5)) + ".." : d.data.name)
+            .style("opacity", 0)
+            .transition().duration(400).delay((d, i) => i * 12 + 300)
+            .style("opacity", 1);
     }
 
     function renderSongs(artistData) {
@@ -1555,7 +1775,8 @@ function initBubbleChart() {
         const backBtn = svg.append("g")
             .attr("transform", "translate(20, 20)")
             .style("cursor", "pointer")
-            .on("click", () => {
+            .on("click", (event) => {
+                event.stopPropagation();
                 backBtn.remove();
                 renderArtists();
             });
@@ -1588,24 +1809,31 @@ function initBubbleChart() {
             });
 
         node.append("circle")
-            .attr("r", d => d.r)
+            .attr("r", 0)
+            .attr("class", d => "bubble-node-" + safeId(d.data.data.Title))
             .style("fill", colorScale(artistData.name)) // Reuse parent artist color
             .style("opacity", d => (selectedTrack && selectedTrack.Title === d.data.data.Title) ? 1 : 0.6)
-            .attr("stroke", "#fff")
-            .attr("stroke-width", d => (selectedTrack && selectedTrack.Title === d.data.data.Title) ? 3 : 1)
-            .on("mouseover", function () { d3.select(this).style("opacity", 1); })
+            .on("mouseover", function () { d3.select(this).transition().duration(200).style("opacity", 1).attr("r", (d3.select(this).datum().r * 0.95) * 1.05); })
             .on("mouseout", function (event, d) {
-                const isSel = selectedTrack && selectedTrack.Title === d.data.data.Title;
-                d3.select(this).style("opacity", isSel ? 1 : 0.6);
-            });
+                const isSelected = selectedTrack && selectedTrack.Title === d.data.data.Title;
+                d3.select(this).transition().duration(200).style("opacity", isSelected ? 1 : 0.6).attr("r", d.r * 0.95);
+            })
+            .transition().duration(500)
+            .delay((d, i) => i * 15)
+            .ease(d3.easeElasticOut.amplitude(1.1).period(0.6))
+            .attr("r", d => d.r * 0.95);
 
         node.append("text")
-            .style("font-size", d => Math.min(12, d.r / 3 + 2) + "px")
+            .style("font-size", d => Math.min(12, (d.r * 0.95) / 3 + 2) + "px")
             .style("fill", "#fff")
+            .style("font-weight", "800")
             .style("text-anchor", "middle")
             .style("pointer-events", "none")
             .attr("dy", "0.3em")
-            .text(d => d.data.name.length > Math.max(d.r / 4, 5) ? d.data.name.substring(0, Math.max(d.r / 4, 5)) + ".." : d.data.name);
+            .text(d => d.data.name.length > Math.max(d.r / 3, 5) ? d.data.name.substring(0, Math.max(d.r / 3, 5)) + ".." : d.data.name)
+            .style("opacity", 0)
+            .transition().duration(300).delay((d, i) => i * 15 + 200)
+            .style("opacity", 1);
 
         const tooltip = d3.select("#tooltip");
         node.on("mousemove", function (event, d) {
@@ -1791,7 +2019,6 @@ function updateArtistBarChart() {
         .style("fill", "#fff")
         .style("font-size", "10px")
         .style("font-weight", "bold")
-        .style("text-shadow", "0 1px 2px rgba(0,0,0,0.8)")
         .text(d => d.songs + " Tracks");
 
     // MERGE (Update active/surviving bars mapping to new rank)
@@ -2041,6 +2268,7 @@ function toggleIndustryEvents() {
     // Synchronize the checkbox states across both toggles
     d3.select("#milestoneToggleInput").property("checked", showIndustryEvents);
     d3.select("#lyricEventToggleInput").property("checked", showIndustryEvents);
+    d3.select("#topicEventToggleInput").property("checked", showIndustryEvents);
 
     d3.selectAll(".annotations-layer")
         .transition().duration(400)
@@ -2481,7 +2709,16 @@ function initParallelChart() {
     const svg = container.append("svg")
         .attr("width", "100%")
         .attr("height", height + margin.top + margin.bottom)
-        .append("g")
+        .on("click", (event) => {
+            // Deselect if clicking on the background (svg or g)
+            if (event.target.tagName === 'svg' || event.target.tagName === 'rect') {
+                selectedTrack = null;
+                d3.select("#songDropdown").property("value", "");
+                updateDashboard();
+            }
+        });
+
+    const g = svg.append("g")
         .attr("transform", `translate(${margin.left}, ${margin.top})`);
 
     // X scale is for the features (ordinal)
@@ -2525,7 +2762,7 @@ function initParallelChart() {
             .style("stroke-width", "2px");
     });
 
-    parallelData = { svg, x, y, linesGroup, highlightGroup, width, height };
+    parallelData = { svg: g, x, y, linesGroup, highlightGroup, width, height };
     updateParallelChart();
 }
 
@@ -2592,6 +2829,7 @@ function updateParallelChart() {
                 selectedTrack = d;
             }
             updateDashboard();
+            event.stopPropagation(); // Prevent background click from deselecting
         });
 
     mergedPaths.transition().duration(globalAnimationDuration)
@@ -2863,7 +3101,7 @@ function updateWordCloud() {
         wordsData = agg.map(([Word, Frequency]) => {
             // Re-fetch category for aggregated words
             const firstMatch = wordcloudDataset.find(w => w.Word === Word);
-            return { Word, Frequency, Category: firstMatch ? firstMatch.Category : 'other' };
+            return { Word, Frequency, Category: firstMatch ? firstMatch.Category : 'Other' };
         });
     }
 
@@ -2974,7 +3212,7 @@ function initKeyChart() {
     if (keyChartActiveKey === null || isNaN(keyChartActiveKey)) {
         // LEVEL 1: RADIAL ROSE CHART (Key selection)
         backBtn.style("display", "none");
-        g.selectAll('.key-segment, .key-count-label, .key-label, .radial-guide, .key-song-bubble, .mode-bubble').remove(); 
+        g.selectAll('.key-segment, .key-count-label, .key-label, .radial-guide, .key-song-bubble, .mode-bubble').remove();
         keyChartSvg.selectAll(".key-chart-header").remove();
 
         const rollup = d3.rollup(plotData, v => v.length, d => d.key);
@@ -3053,7 +3291,7 @@ function initKeyChart() {
     } else if (keyChartActiveMode === null) {
         // LEVEL 2: MODE SELECTION (MAJOR vs MINOR)
         backBtn.style("display", "block");
-        g.selectAll('.key-segment, .key-count-label, .key-label, .radial-guide, .key-song-bubble').remove(); 
+        g.selectAll('.key-segment, .key-count-label, .key-label, .radial-guide, .key-song-bubble').remove();
         keyChartSvg.selectAll(".key-chart-header").remove();
 
         const songsInKey = plotData.filter(d => d.key === keyChartActiveKey);
@@ -3061,8 +3299,8 @@ function initKeyChart() {
         const minorSongs = songsInKey.filter(d => d.mode === 0);
 
         const modes = [
-            { label: 'Major', mode: 1, count: majorSongs.length, color: '#2dd4bf', x: -width/4 },
-            { label: 'Minor', mode: 0, count: minorSongs.length, color: '#fb7185', x: width/4 }
+            { label: 'Major', mode: 1, count: majorSongs.length, color: '#2dd4bf', x: -width / 4 },
+            { label: 'Minor', mode: 0, count: minorSongs.length, color: '#fb7185', x: width / 4 }
         ];
 
         const node = g.selectAll('.mode-bubble').data(modes, d => d.label);
@@ -3080,7 +3318,7 @@ function initKeyChart() {
                     .style('stroke', d => d.color)
                     .style('stroke-width', 2)
                     .transition().duration(600).ease(d3.easeBackOut)
-                    .attr('r', d => Math.max(45, Math.min(width/4, 45 + (d.count / (songsInKey.length || 1)) * 60)));
+                    .attr('r', d => Math.max(45, Math.min(width / 4, 45 + (d.count / (songsInKey.length || 1)) * 60)));
 
                 group.append('text')
                     .attr('dy', '-0.5em')
@@ -3093,7 +3331,7 @@ function initKeyChart() {
                     .attr('text-anchor', 'middle')
                     .style('fill', 'rgba(255,255,255,0.6)').style('font-size', '11px')
                     .text(d => d.count + ' tracks');
-                
+
                 return group;
             }
         );
@@ -3108,7 +3346,7 @@ function initKeyChart() {
     } else {
         // LEVEL 3: SONG LEVEL (Filtered by Key and Mode)
         backBtn.style("display", "block");
-        g.selectAll('.key-segment, .key-count-label, .key-label, .radial-guide, .mode-bubble').remove(); 
+        g.selectAll('.key-segment, .key-count-label, .key-label, .radial-guide, .mode-bubble').remove();
         keyChartSvg.selectAll(".key-chart-header").remove();
 
         const songsFiltered = plotData.filter(d => d.key === keyChartActiveKey && d.mode === keyChartActiveMode);
@@ -3127,7 +3365,7 @@ function initKeyChart() {
         const dotsEnter = dots.enter().append('circle')
             .attr('class', 'key-song-bubble')
             .attr('r', d => d.r)
-            .style('fill', d => d.mode === 1 ? '#2dd4bf' : '#fb7185') 
+            .style('fill', d => d.mode === 1 ? '#2dd4bf' : '#fb7185')
             .style('opacity', d => opacityScale(d.Sentiment_Score))
             .style('stroke', '#fff').style('stroke-opacity', d => opacityScale(d.Sentiment_Score)).style('stroke-width', 0.5)
             .style('cursor', 'pointer')
@@ -3196,13 +3434,19 @@ function updateKeyChart() {
 --------------------------------------------------------- */
 let wordCategoryBarSvg = null;
 const categoryColors = {
-    'profanity': '#ef4444',     // Red
-    'emotion': '#ec4899',       // Pink
-    'vocalisation': '#8b5cf6',   // Violet
-    'movement': '#10b981',      // Green
-    'time': '#f59e0b',          // Amber
-    'anatomy': '#3b82f6',       // Blue
-    'other': '#6b7280'          // Gray
+    'Action': '#f59e0b',        // Amber
+    'Anatomy': '#3b82f6',       // Blue
+    'Brainrot': '#ef4444',      // Red
+    'Emotion': '#ec4899',       // Pink
+    'Location': '#10b981',      // Emerald
+    'Other': '#6b7280',         // Gray
+    'Party': '#f97316',         // Orange
+    'Person': '#8b5cf6',        // Violet
+    'Profanity': '#991b1b',      // Dark Blood Red
+    'Slang': '#06b6d4',          // Cyan
+    'Time': '#14b8a6',           // Teal
+    'Vocalization': '#6366f1',   // Indigo
+    'Wealth': '#eab308'          // Gold
 };
 
 function initWordCategoryBarChart() {
@@ -3245,7 +3489,7 @@ function updateWordCategoryBarChart() {
     );
 
     const data = Array.from(categoryMap, ([category, value]) => ({ category, value }))
-        .filter(d => d.value > 0 && d.category !== 'other')
+        .filter(d => d.value > 0 && d.category !== 'Other')
         .sort((a, b) => b.value - a.value);
 
     // 2. Setup SVG
@@ -3374,8 +3618,8 @@ function updateLyricEvolutionChart() {
     const chartH = height - margin.top - margin.bottom;
 
     // 1. Data Wrangling for Streamgraph
-    // Keys: Categories (minus 'other')
-    const categories = Object.keys(categoryColors).filter(c => c !== 'other');
+    // Keys: Categories (minus 'Other')
+    const categories = Object.keys(categoryColors).filter(c => c !== 'Other');
 
     // Group all words by Year then Category
     const yearGroups = d3.groups(wordcloudDataset, d => d.Year).sort((a, b) => a[0] - b[0]);
@@ -3403,15 +3647,6 @@ function updateLyricEvolutionChart() {
             .style("stroke", "var(--accent)")
             .style("stroke-width", "2px")
             .style("stroke-dasharray", "4,4")
-            .style("opacity", 0);
-
-        // Add a "Scrub line" (follows mouse)
-        svg.append("line")
-            .attr("class", "scrub-line")
-            .attr("y1", margin.top)
-            .attr("y2", height - margin.bottom)
-            .style("stroke", "rgba(255, 255, 255, 0.4)")
-            .style("stroke-width", "1px")
             .style("opacity", 0);
 
         svg.append("g").attr("class", "streams-group").attr("transform", `translate(${margin.left}, ${margin.top})`);
@@ -3463,17 +3698,11 @@ function updateLyricEvolutionChart() {
         .on("mouseover", function (event, d) {
             gStreams.selectAll(".lyric-stream").classed("dimmed", true);
             d3.select(this).classed("dimmed", false);
-            svg.select(".scrub-line").style("opacity", 1);
         })
         .on("mousemove", function (event, d) {
             const [mx] = d3.pointer(event);
             const rawYear = x.invert(mx);
             const year = Math.round(rawYear);
-
-            // Sync the scrub line
-            svg.select(".scrub-line")
-                .attr("x1", margin.left + x(year))
-                .attr("x2", margin.left + x(year));
 
             // Fetch words from indexed cache
             const yearData = window.lyricLookupIndex ? window.lyricLookupIndex.get(year) : null;
@@ -3500,21 +3729,56 @@ function updateLyricEvolutionChart() {
                 <div class="tooltip-title" style="color:${categoryColors[d.key]}; text-transform:capitalize;">${d.key} • ${year}</div>
                 <div style="font-size:0.7rem; color:rgba(255,255,255,0.4); text-transform:uppercase; margin-bottom:5px;">Top Keywords Preview</div>
                 ${miniCloudHtml}
-                <div style="margin-top:8px; border-top:1px solid rgba(255,255,255,0.1); padding-top:5px; font-size:0.75rem;">
-                    Scrubbing through history...
-                </div>
             `)
                 .style("left", (event.pageX + 15) + "px")
                 .style("top", (event.pageY - 28) + "px");
         })
         .on("mouseout", function () {
             gStreams.selectAll(".lyric-stream").classed("dimmed", false);
-            svg.select(".scrub-line").style("opacity", 0);
             d3.select("#tooltip").transition().duration(500).style("opacity", 0);
+        })
+        .on("click", function (event, d) {
+            const [mx] = d3.pointer(event);
+            const rawYear = x.invert(mx);
+            const year = Math.round(rawYear);
+
+            // 1. Sync Category Selection (Exclusive)
+            selectedWordCategory = (selectedWordCategory === d.key) ? null : d.key;
+            if (selectedWordCategory) selectedTopic = null; // MUTUAL EXCLUSION
+            
+            // 2. Sync Year Selection
+            selectedYear = year;
+            
+            // 3. Update Global Year UI
+            const yearSlider = d3.select("#yearSlider");
+            if (!yearSlider.empty()) {
+                yearSlider.property("value", year);
+                d3.select("#yearLabel").text(year);
+            }
+
+            // 4. Trigger Global Filtering
+            applyFilters();
+            
+            // 5. Refresh related lyrical charts
+            updateWordCloud();
+            updateWordCategoryBarChart();
+            updateLyricEvolutionChart();
+
+            // 6. Autoscroll to Word Cloud (Re-implemented as per request)
+            if (selectedWordCategory) {
+                const cloudElem = document.getElementById("wordCloudContainer");
+                if (cloudElem) {
+                    cloudElem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
         })
         .merge(streams)
         .transition().duration(800)
-        .attr("d", area);
+        .attr("d", area)
+        .style("opacity", d => {
+            if (selectedWordCategory === null) return 0.7;
+            return (selectedWordCategory === d.key) ? 0.95 : 0.15;
+        });
 
     // 5. Category Labels (Balanced horizontal and vertical centering)
     const labelData = series.map(s => {
@@ -3563,7 +3827,10 @@ function updateLyricEvolutionChart() {
         .transition().duration(800)
         .attr("x", d => x(d.x))
         .attr("y", d => y(d.y))
-        .style("opacity", 0.6);
+        .style("opacity", d => {
+            if (selectedWordCategory === null) return 0.6;
+            return (selectedWordCategory === d.key) ? 1 : 0.1;
+        });
 
     // 6. Axis
     gAxis.transition().duration(400).call(d3.axisBottom(x).ticks(14).tickFormat(d3.format("d")));
@@ -3635,5 +3902,407 @@ function updateLyricEvolutionChart() {
                 guide.style("stroke", "rgba(255, 255, 255, 0.25)").style("stroke-width", "1px");
             });
         });
+    }
+}
+
+/* ---------------------------------------------------------
+   THEMATIC TOPIC EVOLUTION FLOW
+   High-resolution analysis of song topics (2010-2023)
+ --------------------------------------------------------- */
+const topicColors = {
+    'Flirting and Early Dating': '#f472b6',      // Light Pink
+    'Unrequited Love': '#3b82f6',                // Blue
+    'Devoted Romantic Love': '#059669',          // Emerald
+    'Party and Club Night': '#d97706',           // Amber
+    'Lust and Sexual Desire': '#b91c1c',         // Crimson
+    'Heartbreak and Breakup Pain': '#4f46e5',    // Indigo
+    'Flexing Wealth and Status': '#7c3aed',      // Violet
+    'Destined Soulmate Love': '#0d9488',         // Teal
+    'Toxic Relationship Drama': '#e11d48',       // Rose
+    'Street Life and Violence': '#334155',       // Slate
+    'Female Empowerment': '#db2777',             // Deep Pink
+    'Dancing Anthem': '#0891b2',                 // Cyan
+    'Escapism and Emotional Numbness': '#ea580c',// Orange
+    'Hustle and Success Story': '#16a34a',       // Green
+    'Other': '#94a3b8'                           // Base Slate
+};
+
+function initTopicEvolutionChart() {
+    const container = document.getElementById("topicEvolutionContainer");
+    if (!container) return;
+    d3.select(container).selectAll("svg").remove();
+    updateTopicEvolutionChart();
+}
+
+function updateTopicEvolutionChart() {
+    const container = document.getElementById("topicEvolutionContainer");
+    if (!container) return;
+
+    const width = container.clientWidth;
+    const height = container.clientHeight || 450;
+    const margin = { top: 60, right: 30, bottom: 40, left: 30 };
+    const chartW = width - margin.left - margin.right;
+    const chartH = height - margin.top - margin.bottom;
+
+    // 1. Data Aggregation - Macroscopic Theme Share (%)
+    const yearlyGroups = d3.groups(originalDataset, d => d.Year).sort((a, b) => a[0] - b[0]);
+    if (yearlyGroups.length === 0) return;
+
+    const topics = Object.keys(topicColors).filter(t => t !== 'Other');
+
+    const stackData = yearlyGroups.map(([year, songs]) => {
+        const row = { year: year };
+        const total = songs.length;
+        topics.forEach(t => {
+            const count = songs.filter(s => s.Topic === t).length;
+            row[t] = total > 0 ? (count / total) * 100 : 0;
+        });
+        const otherCount = songs.filter(s => !topics.includes(s.Topic)).length;
+        row['Other'] = total > 0 ? (otherCount / total) * 100 : 0;
+        return row;
+    });
+
+    // 2. Setup SVG
+    let svg = d3.select(container).select("svg");
+    if (svg.empty()) {
+        svg = d3.select(container).append("svg")
+            .attr("width", width)
+            .attr("height", height);
+
+        svg.append("defs").attr("class", "topic-defs");
+        svg.append("g").attr("class", "streams-group").attr("transform", `translate(${margin.left}, ${margin.top})`);
+        svg.append("g").attr("class", "labels-group").attr("transform", `translate(${margin.left}, ${margin.top})`);
+        svg.append("g").attr("class", "lyric-flow-axis").attr("transform", `translate(${margin.left}, ${height - margin.bottom})`);
+        svg.append("g").attr("class", "annotations-layer lyric-events-group").attr("transform", `translate(${margin.left}, ${margin.top})`);
+        svg.append("g").attr("class", "selection-layer").attr("transform", `translate(${margin.left}, ${margin.top})`);
+
+        svg.append("line")
+            .attr("class", "year-indicator")
+            .attr("y1", margin.top)
+            .attr("y2", height - margin.bottom)
+            .style("stroke", "var(--accent)")
+            .style("stroke-width", "2.5px")
+            .style("stroke-dasharray", "4,4")
+            .style("opacity", 0)
+            .style("pointer-events", "none");
+    }
+
+    const gStreams = svg.select(".streams-group");
+    const gLabels = svg.select(".labels-group");
+    const gAxis = svg.select(".lyric-flow-axis");
+    const gEvents = svg.select(".lyric-events-group");
+
+    // 3. D3 Stack & Scales
+    const allKeys = [...topics]; // Removed 'Other' catch-all
+    const stack = d3.stack()
+        .keys(allKeys)
+        .offset(d3.stackOffsetWiggle)
+        .order(d3.stackOrderInsideOut);
+
+    const series = stack(stackData);
+
+    const x = d3.scaleLinear()
+        .domain(d3.extent(stackData, d => d.year))
+        .range([0, chartW]);
+
+    const y = d3.scaleLinear()
+        .domain([
+            d3.min(series, s => d3.min(s, d => d[0])),
+            d3.max(series, s => d3.max(s, d => d[1]))
+        ])
+        .range([chartH, 0]);
+
+    const areaArea = d3.area()
+        .x(d => x(d.data.year))
+        .y0(d => y(d[0]))
+        .y1(d => y(d[1]))
+        .curve(d3.curveBasis);
+
+    const centerLine = d3.line()
+        .x(d => x(d.data.year))
+        .y(d => y((d[0] + d[1]) / 2))
+        .curve(d3.curveBasis);
+
+    // 4. Render Paths
+    const paths = gStreams.selectAll(".lyric-stream")
+        .data(series, d => d.key);
+
+    paths.exit().remove();
+
+    const pathsEnter = paths.enter().append("path")
+        .attr("class", "lyric-stream")
+        .attr("d", areaArea)
+        .attr("fill", d => topicColors[d.key] || "#999")
+        .style("opacity", 0); // Fade in on initialization
+
+    pathsEnter.on("mouseover", function (event, d) {
+        gStreams.selectAll(".lyric-stream").classed("dimmed", true);
+        d3.select(this).classed("dimmed", false);
+
+        const [mx] = d3.pointer(event);
+        const year = Math.round(x.invert(mx));
+        const row = stackData.find(r => r.year === year);
+        const val = row ? row[d.key] : 0;
+
+        const tooltip = d3.select("#tooltip");
+        tooltip.transition().duration(50).style("opacity", 1);
+        tooltip.html(`
+            <div class="tooltip-title" style="color:${topicColors[d.key] || "#fff"}">${d.key} • ${year}</div>
+            <div style="font-size: 0.85rem; margin-bottom: 5px;">Trend Intensity: <strong>${d3.format(".1f")(val)}%</strong></div>
+        `)
+            .style("left", (event.pageX + 15) + "px")
+            .style("top", (event.pageY - 28) + "px");
+
+        // Dynamic Label Update: High-contrast white on hover
+        gLabels.selectAll(".stream-label").filter(ld => ld.key === d.key)
+            .style("fill", "#fff") // Stand out on hover
+            .style("filter", "brightness(1.5) drop-shadow(0 0 5px rgba(255,255,255,0.4))")
+            .select("textPath")
+            .text(`${d.key} • ${year}`);
+    })
+        .on("mousemove", function (event, d) {
+            const [mx] = d3.pointer(event);
+            const year = Math.round(x.invert(mx));
+            d3.select("#tooltip")
+                .style("left", (event.pageX + 15) + "px")
+                .style("top", (event.pageY - 28) + "px");
+
+            // Continuous label update as user scrolls horizontally
+            gLabels.selectAll(".stream-label").filter(ld => ld.key === d.key)
+                .select("textPath")
+                .text(`${d.key} • ${year}`);
+        })
+        .on("mouseout", function (event, d) {
+            gStreams.selectAll(".lyric-stream").classed("dimmed", false);
+            d3.select("#tooltip").transition().duration(500).style("opacity", 0);
+
+            // Revert Label: Theme-specific color OR bright highlight if selected
+            gLabels.selectAll(".stream-label").filter(ld => ld.key === d.key)
+                .transition().duration(400)
+                .style("fill", ld => (selectedTopic === ld.key) ? "#fff" : topicColors[ld.key])
+                .style("opacity", ld => {
+                    if (!selectedTopic) return 0.6;
+                    return (selectedTopic === ld.key) ? 1 : 0.1;
+                })
+                .style("filter", ld => (selectedTopic === ld.key) ? "drop-shadow(0 0 8px rgba(255,255,255,0.8))" : "none")
+                .select("textPath")
+                .text(d.key);
+        })
+        .on("click", function (event, d) {
+            const [mx] = d3.pointer(event);
+            const year = Math.round(x.invert(mx));
+
+            selectedTopic = d.key;
+            selectedYear = year;
+            selectedWordCategory = null; // MUTUAL EXCLUSION
+            selectedTrack = null; // Clear active song on theme change
+            d3.select("#songDropdown").property("value", "");
+
+            updateDashboard(); // Immediately clear embed and radar specifics
+            
+            // Sync related charts for the exclusive selection
+            updateWordCloud();
+            updateWordCategoryBarChart();
+            updateLyricEvolutionChart();
+
+            // Sync Year Slider UI
+            const slider = d3.select("#yearSlider");
+            slider.property("value", year);
+            d3.select("#yearLabel").text(year);
+
+            applyFilters();
+
+            // Autoscroll to results
+            const bubbleCont = document.getElementById("bubbleChartContainer");
+            if (bubbleCont) bubbleCont.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            // Visual confirmation of click (brightness spike)
+            d3.select(this)
+                .transition().duration(100).style("filter", "brightness(1.8)")
+                .transition().duration(400).style("filter", "none");
+        });
+
+    paths.merge(pathsEnter)
+        .transition().duration(800)
+        .attr("d", areaArea)
+        .style("opacity", d => {
+            if (!selectedTopic) return 0.7;
+            return (selectedTopic === d.key) ? 0.95 : 0.15;
+        });
+
+    // 5. Selection Highlight
+    const gSelection = svg.select(".selection-layer");
+    gSelection.selectAll("*").remove();
+
+    if (selectedTopic && selectedYear) {
+        const row = stackData.find(d => d.year === selectedYear);
+        const selSeries = series.find(s => s.key === selectedTopic);
+
+        if (row && selSeries) {
+            const point = selSeries.find(p => p.data.year === selectedYear);
+            if (point) {
+                const sx = x(selectedYear);
+                const sy0 = y(point[0]);
+                const sy1 = y(point[1]);
+                const sym = y((point[0] + point[1]) / 2);
+
+                // Vertical Highlight Line
+                gSelection.append("line")
+                    .attr("x1", sx).attr("x2", sx)
+                    .attr("y1", sy0).attr("y2", sy1)
+                    .attr("stroke", "#fff")
+                    .attr("stroke-width", "3px")
+                    .style("filter", "drop-shadow(0 0 8px #fff)")
+                    .style("opacity", 0)
+                    .transition().duration(600).style("opacity", 1);
+
+                // Focal Selection Circle
+                gSelection.append("circle")
+                    .attr("cx", sx).attr("cy", sym)
+                    .attr("r", 15)
+                    .attr("fill", "var(--accent)")
+                    .attr("stroke", "#fff")
+                    .attr("stroke-width", "2px")
+                    .style("opacity", 0)
+                    .style("filter", "drop-shadow(0 0 12px var(--accent))")
+                    .transition().duration(800).ease(d3.easeElasticOut).attr("r", 7).style("opacity", 1);
+
+                // Add a text label above the pulse for clarity
+                // (Floating selection label removed as per user request to favor in-stream brightness)
+            }
+        }
+    }
+
+    let defGroup = svg.select(".topic-defs");
+    const centerPaths = defGroup.selectAll("path").data(series, d => d.key);
+    centerPaths.exit().remove();
+    centerPaths.enter().append("path")
+        .attr("id", d => `topic-path-${d.key.replace(/\s+/g, '-')}`)
+        .merge(centerPaths)
+        .transition().duration(800)
+        .attr("d", centerLine);
+
+    // 5. Annotations - Industry Milestones
+    gEvents.selectAll("*").remove();
+    gEvents.style("opacity", showIndustryEvents ? 1 : 0);
+    if (showIndustryEvents) {
+        industryEvents.forEach((evt, i) => {
+            if (evt.year < 2010 || evt.year > 2023) return;
+            const ex = x(evt.year);
+            const mg = gEvents.append("g").attr("class", "industry-event milestone-group").style("cursor", "help");
+
+            // Vertical dashed guide
+            const guide = mg.append("line")
+                .attr("x1", ex).attr("x2", ex)
+                .attr("y1", -40).attr("y2", chartH)
+                .style("stroke", "rgba(255, 255, 255, 0.25)")
+                .style("stroke-width", "1px")
+                .style("stroke-dasharray", "4,4");
+
+            // Alternating Label Position at the TOP
+            const yPos = -35 + (i % 2 === 0 ? 0 : 18);
+
+            const mLabel = mg.append("text")
+                .attr("x", ex)
+                .attr("y", yPos)
+                .attr("text-anchor", "middle")
+                .style("fill", "var(--accent)")
+                .style("font-size", "9px")
+                .style("font-weight", "800")
+                .style("text-transform", "uppercase")
+                .style("letter-spacing", "0.5px")
+                .style("opacity", 0.7)
+                .text(evt.label);
+
+            mg.on("mouseover", function (event) {
+                const tooltip = d3.select("#tooltip");
+                tooltip.transition().duration(200).style("opacity", 1);
+                tooltip.html(`
+                    <div class="tooltip-title" style="color:var(--accent); font-size:14px;">${evt.label} (${evt.year})</div>
+                    <div style="font-size: 0.95rem; margin-top:5px; line-height:1.4; color: #fff;">${evt.description}</div>
+                `)
+                    .style("left", (event.pageX + 15) + "px").style("top", (event.pageY - 28) + "px");
+
+                mLabel.style("opacity", 1).style("filter", "drop-shadow(0 0 5px var(--accent))");
+                guide.style("stroke", "var(--accent)").style("stroke-width", "2px").style("opacity", 1);
+            }).on("mouseout", function () {
+                d3.select("#tooltip").transition().duration(500).style("opacity", 0);
+                mLabel.style("opacity", 0.7).style("filter", "none");
+                guide.style("stroke", "rgba(255, 255, 255, 0.25)").style("stroke-width", "1px");
+            });
+        });
+    }
+
+    // 6. Labels - Topic Names (Forced center alignment at middle of the chart)
+    const labelData = series.map(s => {
+        // Determine the middle interval of the time series
+        const midIndex = Math.floor(s.length / 2);
+        const centerPoint = s[midIndex];
+
+        const thickness = centerPoint[1] - centerPoint[0];
+
+        // If the area happens to be incredibly thin at the exact center, don't label it.
+        // This avoids ugly massive text overlapping outside the bounds.
+        if (thickness < 3) return null;
+
+        return {
+            key: s.key,
+            offsetPct: 50, // Strict center
+            pxHeight: y(centerPoint[0]) - y(centerPoint[1]) // Height bound at the exact center
+        };
+    }).filter(d => d !== null);
+
+    const labels = gLabels.selectAll(".stream-label").data(labelData, d => d.key);
+    labels.exit().remove();
+
+    const labelsEnter = labels.enter().append("text")
+        .attr("class", "stream-label")
+        .style("font-weight", "900")
+        .style("text-transform", "uppercase")
+        .style("letter-spacing", "0.5px")
+        .style("pointer-events", "none")
+        .style("opacity", 0);
+
+    labelsEnter.append("textPath")
+        .attr("href", d => `#topic-path-${d.key.replace(/\s+/g, '-')}`)
+        .attr("text-anchor", "middle")
+        .attr("dominant-baseline", "middle")
+        .text(d => d.key);
+
+    const mergedLabels = labelsEnter.merge(labels);
+
+    mergedLabels
+        .transition().duration(800)
+        .style("fill", d => (selectedTopic === d.key) ? "#fff" : topicColors[d.key])
+        .style("font-size", d => {
+            // Fill height: Uses 85% of available central height
+            let size = Math.min(d.pxHeight * 0.85, 60);
+
+            // Horizontal constraint: Relaxed to allow larger text, but capped for legibility
+            const maxSizeForWidth = (chartW * 0.45) / (d.key.length * 0.55);
+            size = Math.min(size, maxSizeForWidth);
+
+            return Math.max(size, 8) + "px";
+        })
+        .style("opacity", d => {
+            if (!selectedTopic) return 0.6;
+            return (selectedTopic === d.key) ? 1 : 0.1;
+        })
+        .style("filter", d => (selectedTopic === d.key) ? "drop-shadow(0 0 10px rgba(255,255,255,0.9))" : "none");
+
+    mergedLabels.select("textPath")
+        .transition().duration(800)
+        .attr("startOffset", d => `${d.offsetPct}%`);
+
+    // 7. Axis & Indicator
+    gAxis.transition().duration(400).call(d3.axisBottom(x).ticks(14).tickFormat(d3.format("d")));
+
+    if (selectedYear) {
+        svg.select(".year-indicator").transition().duration(globalAnimationDuration)
+            .attr("x1", margin.left + x(selectedYear))
+            .attr("x2", margin.left + x(selectedYear))
+            .style("opacity", 1);
+    } else {
+        svg.select(".year-indicator").style("opacity", 0);
     }
 }
