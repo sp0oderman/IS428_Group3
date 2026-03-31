@@ -77,13 +77,28 @@
             <div class="chart-header">
                 <h2>Audio Features Radar</h2>
             </div>
-            <!-- Legend migrated to SVG inside radarChartContainer for SLEEK design -->
-            <div id="radarChartContainer" style="margin-top: 10px;"></div>
+            <div id="radarChartLegend" class="chart-legend-bar">
+                <div style="display: flex; gap: 15px;">
+                    <div class="legend-item">
+                        <span class="legend-dot"
+                            style="background: var(--avg-stroke); box-shadow: 0 0 5px var(--avg-stroke);"></span>
+                        <span class="legend-label">Global Average</span>
+                    </div>
+                    <div id="radarSelLegendItem" class="legend-item" style="display: none;">
+                        <span class="legend-dot"
+                            style="background: var(--sel-stroke); box-shadow: 0 0 5px var(--sel-stroke);"></span>
+                        <span class="legend-label">Selected Track</span>
+                    </div>
+                </div>
+            </div>
+            <div id="radarChartContainer"></div>
 
-            <div class="chart-header" style="margin-top: 30px; display: flex; justify-content: space-between; align-items: center;">
+            <div class="chart-header"
+                style="margin-top: 30px; display: flex; justify-content: space-between; align-items: center;">
                 <h2>Artist & Song Explorer</h2>
-                <button id="bubbleResetBtn" onclick="clearTopicFilter()" class="btn" 
-                        style="display: none; padding: 4px 10px; font-size: 0.75rem; background: rgba(var(--accent-rgb), 0.2); border: 1px solid var(--accent); color: var(--accent); font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">Reset Selection</button>
+                <button id="bubbleResetBtn" onclick="clearTopicFilter()" class="btn"
+                    style="display: none; padding: 4px 10px; font-size: 0.75rem; background: rgba(var(--accent-rgb), 0.2); border: 1px solid var(--accent); color: var(--accent); font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">Reset
+                    Selection</button>
             </div>
             <p class="subtitle" style="font-size: 0.8rem;">Artists are sized by total top tracks. Click an artist to
                 reveal their songs.</p>
@@ -94,7 +109,7 @@
                 <p class="subtitle" style="font-size: 0.8rem;">Watch how the streaming giants rise and fall over time by
                     playing the Timeline.</p>
             </div>
-            <div id="artistBarChartContainer" style="width: 100%; height: 320px;"></div>
+            <div id="artistBarChartContainer"></div>
 
             <div class="chart-header" style="margin-top: 30px;">
                 <h2>Musical Key Anatomy</h2>
@@ -102,19 +117,32 @@
                     tracks. Mode (Teal=Major, Rose=Minor), Intensity (Opacity=Sentiment).</p>
             </div>
 
-            <div id="keyChartLegend"
-                style="background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); padding: 5px 10px; margin-bottom: 5px; font-size: 0.75rem; display: flex; justify-content: space-between; align-items: center; color: rgba(255,255,255,0.7);">
-                <div style="display:flex; gap:8px;">
-                    <div><span
-                            style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#2dd4bf;"></span>
-                        Major</div>
-                    <div><span
-                            style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#fb7185;"></span>
-                        Minor</div>
+            <div id="keyChartLegend" class="chart-legend-bar">
+                <!-- Left: Mode Legend (Always Visible) -->
+                <div id="keyModeLegend" style="display:flex; gap:12px; align-items: center;">
+                    <div class="legend-item">
+                        <span class="legend-dot" style="background:#2dd4bf; box-shadow: 0 0 5px #2dd4bf;"></span>
+                        <span class="legend-label">Major</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-dot" style="background:#fb7185; box-shadow: 0 0 5px #fb7185;"></span>
+                        <span class="legend-label">Minor</span>
+                    </div>
                 </div>
-                <div><span style="opacity:1; font-weight:bold;">Solid</span>=Happy ↔ <span
-                        style="opacity:0.3;">Faded</span>=Sad</div>
+
+                <!-- Right: Sentiment Legend (Shown only in Song View) -->
+                <div id="keySentimentLegend"
+                    style="display: none; align-items: center; gap: 10px; transition: all 0.4s ease;">
+                    <span
+                        style="color: rgba(255,255,255,0.4); font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Sad</span>
+                    <div
+                        style="width: 60px; height: 6px; background: linear-gradient(to right, rgba(255,255,255,0.1), rgba(255,255,255,0.9)); border-radius: 3px; border: 1px solid rgba(255,255,255,0.1);">
+                    </div>
+                    <span
+                        style="color: rgba(255,255,255,0.9); font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Happy</span>
+                </div>
             </div>
+
 
             <div id="keyChartContainer"
                 style="width: 100%; aspect-ratio: 1; min-height: 250px; background: rgba(0,0,0,0.1); border-radius: 12px; margin-bottom: 20px; overflow: hidden; position: relative;">
@@ -153,27 +181,29 @@
         <!-- Main Content: Scatter Grids -->
         <main class="main-content glass-panel">
             <!-- Active Topic Filter Badge -->
-            <div id="activeTopicIndicator" 
-                 style="display: none; align-items: center; gap: 10px; margin-bottom: 25px; padding: 8px 16px; background: rgba(var(--accent-rgb), 0.1); border: 1px solid var(--accent); border-radius: 24px; width: fit-content; box-shadow: 0 0 15px rgba(var(--accent-rgb), 0.15); animation: pulse Glow 2s infinite ease-in-out;">
-                <span style="font-size: 0.75rem; color: var(--accent); font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Theme Insight:</span>
+            <div id="activeTopicIndicator"
+                style="display: none; align-items: center; gap: 10px; margin-bottom: 25px; padding: 8px 16px; background: rgba(var(--accent-rgb), 0.1); border: 1px solid var(--accent); border-radius: 24px; width: fit-content; box-shadow: 0 0 15px rgba(var(--accent-rgb), 0.15); animation: pulse Glow 2s infinite ease-in-out;">
+                <span
+                    style="font-size: 0.75rem; color: var(--accent); font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Theme
+                    Insight:</span>
                 <span id="activeTopicName" style="font-size: 0.85rem; color: #fff; font-weight: 700;"></span>
-                <div onclick="clearTopicFilter()" 
-                     title="Clear Theme Filter"
-                     style="cursor: pointer; margin-left: 8px; color: var(--accent); font-size: 1.25rem; line-height: 1; font-weight: 900; opacity: 0.6; transition: all 0.2s;" 
-                     onmouseover="this.style.opacity=1; this.style.transform='scale(1.2)';" 
-                     onmouseout="this.style.opacity=0.6; this.style.transform='scale(1)';">&times;</div>
+                <div onclick="clearTopicFilter()" title="Clear Theme Filter"
+                    style="cursor: pointer; margin-left: 8px; color: var(--accent); font-size: 1.25rem; line-height: 1; font-weight: 900; opacity: 0.6; transition: all 0.2s;"
+                    onmouseover="this.style.opacity=1; this.style.transform='scale(1.2)';"
+                    onmouseout="this.style.opacity=0.6; this.style.transform='scale(1)';">&times;</div>
             </div>
 
             <!-- Active Lyrical Filter Badge -->
-            <div id="activeLyricalIndicator" 
-                 style="display: none; align-items: center; gap: 10px; margin-bottom: 25px; padding: 8px 16px; background: rgba(var(--accent-rgb), 0.1); border: 1px solid var(--accent); border-radius: 24px; width: fit-content; box-shadow: 0 0 15px rgba(var(--accent-rgb), 0.15); animation: pulse Glow 2s infinite ease-in-out;">
-                <span style="font-size: 0.75rem; color: var(--accent); font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Lyrical Insight:</span>
+            <div id="activeLyricalIndicator"
+                style="display: none; align-items: center; gap: 10px; margin-bottom: 25px; padding: 8px 16px; background: rgba(var(--accent-rgb), 0.1); border: 1px solid var(--accent); border-radius: 24px; width: fit-content; box-shadow: 0 0 15px rgba(var(--accent-rgb), 0.15); animation: pulse Glow 2s infinite ease-in-out;">
+                <span
+                    style="font-size: 0.75rem; color: var(--accent); font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Lyrical
+                    Insight:</span>
                 <span id="activeLyricalName" style="font-size: 0.85rem; color: #fff; font-weight: 700;"></span>
-                <div onclick="clearLyricalFilter()" 
-                     title="Clear Lyrical Filter"
-                     style="cursor: pointer; margin-left: 8px; color: var(--accent); font-size: 1.25rem; line-height: 1; font-weight: 900; opacity: 0.6; transition: all 0.2s;" 
-                     onmouseover="this.style.opacity=1; this.style.transform='scale(1.2)';" 
-                     onmouseout="this.style.opacity=0.6; this.style.transform='scale(1)';">&times;</div>
+                <div onclick="clearLyricalFilter()" title="Clear Lyrical Filter"
+                    style="cursor: pointer; margin-left: 8px; color: var(--accent); font-size: 1.25rem; line-height: 1; font-weight: 900; opacity: 0.6; transition: all 0.2s;"
+                    onmouseover="this.style.opacity=1; this.style.transform='scale(1.2)';"
+                    onmouseout="this.style.opacity=0.6; this.style.transform='scale(1)';">&times;</div>
             </div>
 
             <div class="chart-header" style="margin-bottom: 20px;">
@@ -374,7 +404,8 @@
                 style="margin-top: 40px; border-top: 1px solid var(--glass-border); padding-top: 20px; display: flex; justify-content: space-between; align-items: flex-start;">
                 <div>
                     <h2>Thematic Topic Evolution</h2>
-                    <p class="subtitle">Microscopic shift of specific song themes from 2010 to 2023 derived from advanced NLP analysis of top-performing track lyrics.</p>
+                    <p class="subtitle">Microscopic shift of specific song themes from 2010 to 2023 derived from
+                        advanced NLP analysis of top-performing track lyrics.</p>
                 </div>
                 <div
                     style="display: flex; align-items: center; gap: 8px; background: rgba(30, 41, 59, 0.4); padding: 6px 12px; border-radius: 20px; backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.08);">

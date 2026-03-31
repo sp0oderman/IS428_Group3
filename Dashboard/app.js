@@ -58,7 +58,7 @@ function formatDuration(fracMin) {
 }
 
 let featureStats = {};
-const colorScale = d3.scaleOrdinal(d3.schemePaired); // Different colors for artists
+const colorScale = d3.scaleOrdinal(); // Will be populated after data load
 
 // Human-readable display name for any feature key
 const featureLabelMap = {
@@ -118,6 +118,16 @@ Promise.all([
 
     originalDataset = data;
     dataset = [...originalDataset];
+
+    // --- ARTIST COLOR SYNC ---
+    // Rank top 10 artists by overall streams to give them the most distinct colors
+    const artistStreams = d3.rollup(originalDataset, v => d3.sum(v, d => d.Streams), d => d.Artist);
+    const sortedArtists = Array.from(artistStreams.entries()).sort((a, b) => b[1] - a[1]);
+    const topArtists = sortedArtists.map(d => d[0]);
+
+    // Premium custom palette: Tableau10 (very distinct) + Paired (fallback)
+    const premiumPalette = [...d3.schemeTableau10, ...d3.schemePaired, ...d3.schemeCategory10];
+    colorScale.domain(topArtists).range(premiumPalette);
 
     // Set up Year Slider
     const years = originalDataset.map(d => d.Year).filter(y => !isNaN(y));
@@ -307,7 +317,7 @@ function clearTopicFilter() {
     applyFilters();
 }
 
-window.clearLyricalFilter = function() {
+window.clearLyricalFilter = function () {
     selectedWordCategory = null;
     updateWordCloud();
     updateWordCategoryBarChart();
@@ -876,6 +886,18 @@ function initDistributionCurves() {
         const sweetSpotGroup = svg.append("g").attr("class", "sweet-spot-group");
         const songHighlightGroup = svg.append("g").attr("class", "song-highlight-group");
 
+        // Small Legend for Mean (μ) in top-right
+        const legend = svg.append("g").attr("transform", `translate(${width - 65}, -12)`);
+        legend.append("line")
+            .attr("x1", 0).attr("x2", 12)
+            .attr("y1", 0).attr("y2", 0)
+            .attr("stroke", "#fff").attr("stroke-width", "2px").attr("stroke-dasharray", "3,2").style("opacity", 0.7);
+        legend.append("text")
+            .attr("x", 16).attr("y", 3.5)
+            .style("fill", "rgba(255,255,255,0.5)").style("font-size", "9px").style("font-weight", "600")
+            .style("letter-spacing", "0.5px").text("MEAN");
+
+
         // Vertical Crosshair and Focal Point
         const crosshair = svg.append("line").attr("class", "dist-crosshair").attr("stroke", "rgba(255,255,255,0.4)").attr("stroke-width", "1px").attr("y1", 0).attr("y2", height).style("opacity", 0).style("pointer-events", "none");
         const focusPoint = svg.append("circle").attr("class", "dist-focus-point").attr("r", 5).attr("fill", "var(--accent)").attr("stroke", "#fff").attr("stroke-width", "1.5px").style("opacity", 0).style("pointer-events", "none");
@@ -1425,7 +1447,7 @@ function buildRadarLayout() {
 
     // Add SVG Filters for Glow
     const defs = radarSvg.append("defs");
-    
+
     // Selection Glow
     const filterSelect = defs.append("filter").attr("id", "radarSelectionGlow").attr("height", "300%").attr("width", "300%").attr("x", "-100%").attr("y", "-100%");
     filterSelect.append("feGaussianBlur").attr("stdDeviation", "4.5").attr("result", "coloredBlur");
@@ -1453,6 +1475,9 @@ function getNormalizedRadarData(trackObj) {
 }
 
 function updateRadarChart() {
+    // Toggle Selected Track in legend
+    d3.select("#radarSelLegendItem").style("display", selectedTrack ? "flex" : "none");
+
     const data = [];
 
     // Average
@@ -1554,10 +1579,10 @@ function drawRadarChart(data) {
         .on('mouseover', function (event, d) {
             d3.selectAll(".radarArea").transition().duration(200).style("fill-opacity", 0.05);
             d3.select(this).transition().duration(200).style("fill-opacity", 0.8);
-            
+
             const isAvg = d3.select(this.parentNode).datum() === data[0];
             let htmlContent = `<div class="tooltip-title" style="margin-bottom: 5px;">${isAvg ? "Average Profile" : (selectedTrack ? selectedTrack.Title : "Profile")}</div>`;
-            
+
             d.forEach(feature => {
                 const valColor = isAvg ? "#38bdf8" : "#f472b6";
                 htmlContent += `<div style="font-size: 11px; text-transform: capitalize; margin-bottom: 2px;">
@@ -1612,50 +1637,6 @@ function drawRadarChart(data) {
             d3.select(this).attr("r", radarConfig.dotRadius).style("fill", getStroke(data.indexOf(parentData)));
             tooltip.transition().duration(500).style("opacity", 0);
         });
-
-    // 7. INTEGRATED HORIZONTAL LEGEND BADGE
-    const legendG = radarSvg.append("g")
-        .attr("class", "legendBadge")
-        .attr("transform", `translate(${-radarConfig.w/2 - 10}, ${-radarConfig.h/2 - 65})`);
-
-    const legendData = [
-        { label: "Average", color: "var(--avg-stroke)" },
-        { label: "Selected Track", color: "var(--sel-stroke)" }
-    ];
-
-    let currentX = 0;
-    legendData.filter((d, i) => i === 0 || selectedTrack).forEach((d, i) => {
-        const item = legendG.append("g").attr("transform", `translate(${currentX}, 0)`);
-        
-        // Match pill width to text (80px for Average, 115px for Selected Track)
-        const pillW = d.label === "Average" ? 75 : 115;
-
-        item.append("rect")
-            .attr("width", pillW)
-            .attr("height", 16)
-            .attr("rx", 8)
-            .style("fill", "rgba(0,0,0,0.35)")
-            .style("stroke", "rgba(255,255,255,0.08)");
-
-        item.append("circle")
-            .attr("cx", 8)
-            .attr("cy", 8)
-            .attr("r", 4.5)
-            .style("fill", d.color)
-            .style("filter", i === 1 ? "url(#radarStdGlow)" : "none");
-
-        item.append("text")
-            .attr("x", 18)
-            .attr("y", 12)
-            .style("font-size", "8.5px")
-            .style("font-weight", "900")
-            .style("text-transform", "uppercase")
-            .style("letter-spacing", "0.5px")
-            .style("fill", "rgba(255,255,255,0.85)")
-            .text(d.label);
-            
-        currentX += pillW + 10; // Tight, dynamic spacing
-    });
 }
 
 /* ---------------------------------------------------------
@@ -1752,8 +1733,12 @@ function initBubbleChart() {
             .style("font-weight", "900")
             .style("text-anchor", "middle")
             .style("pointer-events", "none")
-            .attr("dy", "0.3em")
-            .text(d => d.data.name.length > Math.max(d.r / 3, 5) ? d.data.name.substring(0, Math.max(d.r / 3, 5)) + ".." : d.data.name)
+            .attr("dy", "0.35em")
+            .text(d => {
+                if (d.r < 12) return "";
+                const maxChars = Math.floor(d.r / 3.8);
+                return d.data.name.length > maxChars ? d.data.name.substring(0, Math.max(3, maxChars - 1)) + "..." : d.data.name;
+            })
             .style("opacity", 0)
             .transition().duration(400).delay((d, i) => i * 12 + 300)
             .style("opacity", 1);
@@ -1829,8 +1814,12 @@ function initBubbleChart() {
             .style("font-weight", "800")
             .style("text-anchor", "middle")
             .style("pointer-events", "none")
-            .attr("dy", "0.3em")
-            .text(d => d.data.name.length > Math.max(d.r / 3, 5) ? d.data.name.substring(0, Math.max(d.r / 3, 5)) + ".." : d.data.name)
+            .attr("dy", "0.35em")
+            .text(d => {
+                if (d.r < 10) return "";
+                const maxChars = Math.floor(d.r / 4);
+                return d.data.name.length > maxChars ? d.data.name.substring(0, Math.max(3, maxChars - 1)) + "..." : d.data.name;
+            })
             .style("opacity", 0)
             .transition().duration(300).delay((d, i) => i * 15 + 200)
             .style("opacity", 1);
@@ -3212,6 +3201,7 @@ function initKeyChart() {
     if (keyChartActiveKey === null || isNaN(keyChartActiveKey)) {
         // LEVEL 1: RADIAL ROSE CHART (Key selection)
         backBtn.style("display", "none");
+        d3.select("#keySentimentLegend").style("display", "none"); // Hide sentiment legend in Key view
         g.selectAll('.key-segment, .key-count-label, .key-label, .radial-guide, .key-song-bubble, .mode-bubble').remove();
         keyChartSvg.selectAll(".key-chart-header").remove();
 
@@ -3265,8 +3255,21 @@ function initKeyChart() {
                 d3.select('#tooltip').transition().duration(500).style('opacity', 0);
             })
             .attr('d', arc)
-            .style('fill', d => colorScale(d.count))
-            .style('opacity', 1);
+            .style('fill', d => {
+                if (selectedTrack && selectedTrack.key === d.key) {
+                    return selectedTrack.mode === 1 ? '#2dd4bf' : '#fb7185';
+                }
+                return colorScale(d.count);
+            })
+            .style('stroke', d => (selectedTrack && selectedTrack.key === d.key) ? '#fff' : 'rgba(255,255,255,0.1)')
+            .style('stroke-width', d => (selectedTrack && selectedTrack.key === d.key) ? '2px' : '1px')
+            .style('filter', d => (selectedTrack && selectedTrack.key === d.key) ? `drop-shadow(0 0 8px ${selectedTrack.mode === 1 ? '#2dd4bf' : '#fb7185'})` : 'none')
+            .style('opacity', d => {
+                if (selectedTrack) {
+                    return selectedTrack.key === d.key ? 1 : 0.3;
+                }
+                return 1;
+            });
 
         g.selectAll('.key-count-label').data(keysData, d => d.key).join('text')
             .attr('class', 'key-count-label')
@@ -3291,6 +3294,7 @@ function initKeyChart() {
     } else if (keyChartActiveMode === null) {
         // LEVEL 2: MODE SELECTION (MAJOR vs MINOR)
         backBtn.style("display", "block");
+        d3.select("#keySentimentLegend").style("display", "none"); // Hide sentiment legend in Mode view
         g.selectAll('.key-segment, .key-count-label, .key-label, .radial-guide, .key-song-bubble').remove();
         keyChartSvg.selectAll(".key-chart-header").remove();
 
@@ -3314,9 +3318,10 @@ function initKeyChart() {
                 group.append('circle')
                     .attr('r', 0)
                     .style('fill', d => d.color)
-                    .style('fill-opacity', 0.2)
-                    .style('stroke', d => d.color)
-                    .style('stroke-width', 2)
+                    .style('fill-opacity', d => (selectedTrack && selectedTrack.key === keyChartActiveKey && selectedTrack.mode === d.mode) ? 0.8 : 0.2)
+                    .style('stroke', d => (selectedTrack && selectedTrack.key === keyChartActiveKey && selectedTrack.mode === d.mode) ? '#fff' : d.color)
+                    .style('stroke-width', d => (selectedTrack && selectedTrack.key === keyChartActiveKey && selectedTrack.mode === d.mode) ? 3 : 2)
+                    .style('filter', d => (selectedTrack && selectedTrack.key === keyChartActiveKey && selectedTrack.mode === d.mode) ? `drop-shadow(0 0 15px ${d.color})` : 'none')
                     .transition().duration(600).ease(d3.easeBackOut)
                     .attr('r', d => Math.max(45, Math.min(width / 4, 45 + (d.count / (songsInKey.length || 1)) * 60)));
 
@@ -3346,6 +3351,7 @@ function initKeyChart() {
     } else {
         // LEVEL 3: SONG LEVEL (Filtered by Key and Mode)
         backBtn.style("display", "block");
+        d3.select("#keySentimentLegend").style("display", "flex"); // Show sentiment legend in Song view
         g.selectAll('.key-segment, .key-count-label, .key-label, .radial-guide, .mode-bubble').remove();
         keyChartSvg.selectAll(".key-chart-header").remove();
 
@@ -3421,7 +3427,14 @@ function initKeyChart() {
 }
 
 function updateKeyChart() {
-    if (!keyChartSvg || keyChartActiveKey === null) return;
+    if (!keyChartSvg) return;
+    
+    if (keyChartActiveKey === null || keyChartActiveMode === null) {
+        // If we are at Level 1 or 2, we need to refresh the base visuals to reflect selectedTrack highlights
+        initKeyChart();
+        return;
+    }
+
     const opacityScale = d3.scaleLinear().domain([-1, 1]).range([0.55, 0.9]);
     keyChartSvg.selectAll('.key-song-bubble')
         .style('stroke-width', d => (selectedTrack && selectedTrack.Title === d.Title) ? 3 : 0.5)
@@ -3745,10 +3758,10 @@ function updateLyricEvolutionChart() {
             // 1. Sync Category Selection (Exclusive)
             selectedWordCategory = (selectedWordCategory === d.key) ? null : d.key;
             if (selectedWordCategory) selectedTopic = null; // MUTUAL EXCLUSION
-            
+
             // 2. Sync Year Selection
             selectedYear = year;
-            
+
             // 3. Update Global Year UI
             const yearSlider = d3.select("#yearSlider");
             if (!yearSlider.empty()) {
@@ -3758,7 +3771,7 @@ function updateLyricEvolutionChart() {
 
             // 4. Trigger Global Filtering
             applyFilters();
-            
+
             // 5. Refresh related lyrical charts
             updateWordCloud();
             updateWordCategoryBarChart();
@@ -4099,7 +4112,7 @@ function updateTopicEvolutionChart() {
             d3.select("#songDropdown").property("value", "");
 
             updateDashboard(); // Immediately clear embed and radar specifics
-            
+
             // Sync related charts for the exclusive selection
             updateWordCloud();
             updateWordCategoryBarChart();
