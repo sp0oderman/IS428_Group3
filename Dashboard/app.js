@@ -2070,7 +2070,7 @@ function initTrendLines() {
 
     svg.append("g").attr("class", "axis x-axis").attr("transform", `translate(0, ${height})`)
         .call(d3.axisBottom(x));
-    svg.append("g").attr("class", "axis y-axis").call(d3.axisLeft(y).ticks(5).tickFormat(d3.format(".0%")));
+    svg.append("g").attr("class", "axis y-axis").call(d3.axisLeft(y).ticks(5).tickFormat(d3.format(".1f")));
 
     // Y-axis label
     svg.append("text")
@@ -2694,15 +2694,15 @@ function initParallelChart() {
 
     // We will plot ALL features, not just active features
     // but users can reorder or we just stick to allFeatures map.
-    const margin = { top: 60, right: 50, bottom: 40, left: 50 };
-    const containerEl = document.getElementById("parallelChartContainer");
-    const width = containerEl.clientWidth - margin.left - margin.right;
+    const margin = { top: 40, right: 40, bottom: 30, left: 40 };
+    const width = document.getElementById("parallelChartContainer").clientWidth - margin.left - margin.right;
     const height = 500 - margin.top - margin.bottom;
 
     const svg = container.append("svg")
         .attr("width", "100%")
-        .attr("height", 500)
+        .attr("height", height + margin.top + margin.bottom)
         .on("click", (event) => {
+            // Deselect if clicking on the background (svg or g)
             if (event.target.tagName === 'svg' || event.target.tagName === 'rect') {
                 selectedTrack = null;
                 d3.select("#songDropdown").property("value", "");
@@ -2724,27 +2724,26 @@ function initParallelChart() {
             .range([height, 0]);
     });
 
-    // Draw the lines group FIRST so it sits behind the axes - nested inside G
-    const linesGroup = g.append("g").attr("class", "parallel-lines");
-    const highlightGroup = g.append("g").attr("class", "parallel-highlight");
+    // Draw the lines group FIRST so it sits behind the axes
+    const linesGroup = svg.append("g").attr("class", "parallel-lines");
+    const highlightGroup = svg.append("g").attr("class", "parallel-highlight");
 
-    // Draw the axes - nested inside G
+    // Draw the axes
     audioMetrics.forEach(f => {
-        const axisGroup = g.append("g")
+        const axisGroup = svg.append("g")
             .attr("transform", `translate(${x(f)}, 0)`)
             .attr("class", "parallel-axis");
 
         axisGroup.call(d3.axisLeft(y[f]).ticks(5).tickSize(-4).tickPadding(8))
             .selectAll("text")
             .style("fill", "var(--text-secondary)")
-            .style("font-size", "10px");
+            .style("font-size", "9px");
 
         axisGroup.append("text")
-            .attr("y", -20)
+            .attr("y", -15)
             .style("text-anchor", "middle")
             .style("fill", "var(--text-primary)")
             .style("font-weight", "bold")
-            .style("font-size", "11px")
             .style("text-transform", "capitalize")
             .style("cursor", "grab")
             .text(f);
@@ -3440,7 +3439,7 @@ function initKeyChart() {
 
 function updateKeyChart() {
     if (!keyChartSvg) return;
-    
+
     if (keyChartActiveKey === null || keyChartActiveMode === null) {
         // If we are at Level 1 or 2, we need to refresh the base visuals to reflect selectedTrack highlights
         initKeyChart();
