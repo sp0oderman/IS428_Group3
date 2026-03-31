@@ -21,8 +21,8 @@
         <div class="header-title-block"
             style="flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start; text-align: left;">
             <h1 style="margin: 0; font-size: 1.8rem;">Spotify Tracks Analysis</h1>
-            <p style="margin: 2px 0 0 0; color: var(--text-secondary); font-size: 0.85rem;">Top 300 Global Streams &
-                Audio Features</p>
+            <p style="margin: 2px 0 0 0; color: var(--text-secondary); font-size: 0.85rem;">Global Hits from 2010 to
+                2025</p>
         </div>
 
         <!-- Middle: Slider -->
@@ -61,10 +61,10 @@
         <!-- Sidebar: Radar & Bubble Chart -->
         <aside class="sidebar glass-panel">
             <div class="chart-header">
-                <h2>Studio Mixing Board</h2>
-                <p class="subtitle" style="font-size: 0.8rem; margin-bottom: 12px;">Drag the faders to filter top hits
-                    by exact sonic intensity. The 'Sweet Spot' heat map will morph to show where your custom sound
-                    succeeds.</p>
+                <h2>Sonic Filter Mixer</h2>
+                <p class="subtitle" style="font-size: 0.8rem; margin-bottom: 12px;">Refine your search by sonic
+                    intensity. Adjust the faders to see how your preferred sound signature performs among global hits.
+                </p>
                 <button id="resetMixerBtn" class="btn"
                     style="width: 100%; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.4); font-size: 0.8rem; letter-spacing: 1px; text-transform: uppercase;">Reset
                     All Faders</button>
@@ -75,7 +75,9 @@
             </div>
 
             <div class="chart-header">
-                <h2>Audio Features Radar</h2>
+                <h2>Track Audio Signature</h2>
+                <p class="subtitle" style="font-size: 0.8rem; margin-bottom: 15px;">A 360° view of a song's musical
+                    identity. Compare a track's unique shape against the global average.</p>
             </div>
             <div id="radarChartLegend" class="chart-legend-bar">
                 <div style="display: flex; gap: 15px;">
@@ -95,26 +97,25 @@
 
             <div class="chart-header"
                 style="margin-top: 30px; display: flex; justify-content: space-between; align-items: center;">
-                <h2>Artist & Song Explorer</h2>
+                <h2>Artist Hit Explorer</h2>
                 <button id="bubbleResetBtn" onclick="clearTopicFilter()" class="btn"
                     style="display: none; padding: 4px 10px; font-size: 0.75rem; background: rgba(var(--accent-rgb), 0.2); border: 1px solid var(--accent); color: var(--accent); font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">Reset
                     Selection</button>
             </div>
-            <p class="subtitle" style="font-size: 0.8rem;">Artists are sized by total top tracks. Click an artist to
-                reveal their songs.</p>
+            <p class="subtitle" style="font-size: 0.8rem;">Explore top performers by track frequency. Click an artist's
+                bubble to drill down into their specific hits.</p>
             <div id="bubbleChartContainer" style="margin-bottom: 20px;"></div>
 
             <div class="chart-header" style="margin-top: 20px;">
-                <h2>Top 10 Artists (Bar Race)</h2>
-                <p class="subtitle" style="font-size: 0.8rem;">Watch how the streaming giants rise and fall over time by
-                    playing the Timeline.</p>
+                <h2>Artist Streaming Race</h2>
+                <p class="subtitle" style="font-size: 0.8rem;">Watch the leaderboards change across history. Witness how
+                    streaming giants rise and fall each year.</p>
             </div>
             <div id="artistBarChartContainer"></div>
 
             <div class="chart-header" style="margin-top: 30px;">
-                <h2>Musical Key Anatomy</h2>
-                <p class="subtitle" style="font-size: 0.8rem;">Keys sized by popularity. Click a key to dive into its
-                    tracks. Mode (Teal=Major, Rose=Minor), Intensity (Opacity=Sentiment).</p>
+                <h2>Harmonic Frequency Map</h2>
+                <p class="subtitle" style="font-size: 0.8rem;">Deep-dive into the most popular musical keys with higher intensity showing fan favorites.</p>
             </div>
 
             <div id="keyChartLegend" class="chart-legend-bar">
@@ -153,9 +154,8 @@
 
             <div class="chart-header"
                 style="margin-top: 30px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 20px;">
-                <h2>Lyrical DNA (Timeline Word Cloud)</h2>
-                <p class="subtitle" style="font-size: 0.8rem;">The most frequently occurring lyric words in Top hits.
-                    Updates dynamically as you shift through the years.</p>
+                <h2>Lyric Word Cloud</h2>
+                <p class="subtitle" style="font-size: 0.8rem;">Words which define the lyrical content of each era's biggest hits.</p>
             </div>
             <div id="wordCloudContainer"
                 style="width: 100%; height: 300px; background: rgba(0,0,0,0.15); border-radius: 12px; position: relative; margin-bottom: 10px;">
@@ -163,7 +163,9 @@
             </div>
 
             <div class="chart-header" style="margin-top: 10px; padding: 0;">
-                <h3 style="font-size: 0.9rem; margin-bottom: 5px; opacity: 0.8;">Category Distribution</h3>
+                <h3 style="font-size: 0.9rem; margin-bottom: 2px; opacity: 0.8;">Lyric Categorical Breakdown</h3>
+                <p class="subtitle" style="font-size: 0.75rem; margin-bottom: 8px;">Analysis of
+                    lyrical categories.</p>
             </div>
             <div id="wordCategoryBarContainer"
                 style="width: 100%; height: 260px; background: rgba(0,0,0,0.05); border-radius: 12px; position: relative;">
@@ -207,9 +209,8 @@
             </div>
 
             <div class="chart-header" style="margin-bottom: 20px;">
-                <h2>Dimensional Plotter (2D Correlations Map)</h2>
-                <p class="subtitle">Compare two feature combinations side by side. Bubble size encodes a third
-                    dimension.</p>
+                <h2>Bubble Chart Correlations</h2>
+                <p class="subtitle">Plot any two audio features with bubble size to find hidden relationships.</p>
             </div>
 
             <!-- Dual Scatterplot Row -->
@@ -317,9 +318,9 @@
             -->
 
             <div class="chart-header" style="border-top: 1px solid rgba(255,255,255,0.05); padding-top: 30px;">
-                <h2>Features vs Streams</h2>
-                <p class="subtitle">Click any point to view that track's radar signatures. Y-Axis = Features, X-Axis =
-                    Streams (Millions)</p>
+                <h2>Feature Density Profile</h2>
+                <p class="subtitle">Identify the concentration of top-performing songs across features. Peaks show where ranges cluster
+                    for every feature.</p>
             </div>
 
             <div id="featureToggles" class="feature-toggles">
@@ -332,9 +333,9 @@
 
             <div class="chart-header"
                 style="margin-top: 40px; border-top: 1px solid var(--glass-border); padding-top: 20px;">
-                <h2 id="trendHeader">Music Industry Evolution</h2>
-                <p class="subtitle">Observe the macroscopic shift of popular music feature characteristics across a
-                    decade.</p>
+                <h2 id="trendHeader">Decade of Audio Trends</h2>
+                <p class="subtitle">A macroscopic view of industry-wide shifts which tracks how audio features have
+                    transformed over time.</p>
             </div>
             <div style="position: relative;">
                 <!-- Milestone Toggle (Top Right of Chart Container) -->
@@ -357,9 +358,8 @@
 
             <div class="chart-header"
                 style="margin-top: 40px; border-top: 1px solid var(--glass-border); padding-top: 20px;">
-                <h2>Feature Density Distribution (Ridgeline)</h2>
-                <p class="subtitle">Observe the macroscopic distribution curves of the selected features for the current
-                    dataset.</p>
+                <h2>Ridgeline Feature Evolution</h2>
+                <p class="subtitle">Compare the musical footprint of each feature through ridges. Track how distribution peaks shift over time to reveal the changing standards of hit songs.</p>
             </div>
             <div id="ridgelineChart"
                 style="width: 100%; height: 800px; background: rgba(0,0,0,0.2); border-radius: 12px; margin-bottom: 40px; border: 1px solid rgba(255,255,255,0.05); position: relative;">
@@ -368,9 +368,8 @@
 
             <div class="chart-header"
                 style="margin-top: 40px; border-top: 1px solid var(--glass-border); padding-top: 20px;">
-                <h2>Multidimensional Audio Profile (Parallel Coordinates)</h2>
-                <p class="subtitle">Trace the exact sonic recipe of individual tracks across all 12 features
-                    simultaneously.</p>
+                <h2>Multi-dimensional Feature Profiling</h2>
+                <p class="subtitle">Trace the complete sonic profile of tracks across all dimensions simultaneously.</p>
             </div>
             <div id="parallelChartContainer"
                 style="width: 100%; height: 500px; background: rgba(0,0,0,0.2); border-radius: 12px; margin-bottom: 40px; border: 1px solid rgba(255,255,255,0.05); overflow: hidden;">
@@ -380,9 +379,9 @@
             <div class="chart-header"
                 style="margin-top: 40px; border-top: 1px solid var(--glass-border); padding-top: 20px; display: flex; justify-content: space-between; align-items: flex-start;">
                 <div>
-                    <h2>Lyric Evolution Flow (ThemeRiver)</h2>
-                    <p class="subtitle">Witness the macroscopic shift of lyric categories from 2010 to 2023. Category
-                        labels are positioned at their points of peak frequency.</p>
+                    <h2>Lyric Categorical Stream</h2>
+                    <p class="subtitle">The flow of narrative themes. Watch how lyric categories like "Love" or "Party"
+                        surge and fade over time.</p>
                 </div>
                 <div
                     style="display: flex; align-items: center; gap: 8px; background: rgba(30, 41, 59, 0.4); padding: 6px 12px; border-radius: 20px; backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.08);">
@@ -403,9 +402,9 @@
             <div class="chart-header"
                 style="margin-top: 40px; border-top: 1px solid var(--glass-border); padding-top: 20px; display: flex; justify-content: space-between; align-items: flex-start;">
                 <div>
-                    <h2>Thematic Topic Evolution</h2>
-                    <p class="subtitle">Microscopic shift of specific song themes from 2010 to 2023 derived from
-                        advanced NLP analysis of top-performing track lyrics.</p>
+                    <h2>Deep Topic Trends</h2>
+                    <p class="subtitle">Complex topic mapping derived from analysis of lyrical contents across
+                        the years.</p>
                 </div>
                 <div
                     style="display: flex; align-items: center; gap: 8px; background: rgba(30, 41, 59, 0.4); padding: 6px 12px; border-radius: 20px; backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.08);">

@@ -390,7 +390,10 @@ function updateDashboard() {
         d3.select("#radarSelectedLabel").text(selectedTrack.Title);
         if (selectedTrack.href) {
             const embedUrl = selectedTrack.href.replace("/track/", "/embed/track/");
-            d3.select("#spotifyIframe").attr("src", embedUrl);
+            const iframe = d3.select("#spotifyIframe");
+            if (iframe.attr("src") !== embedUrl) {
+                iframe.attr("src", embedUrl);
+            }
             d3.select("#spotifyEmbedContainer").style("display", "block");
             d3.select("#spotifyEmbedPlaceholder").style("display", "none");
         }
@@ -2691,15 +2694,15 @@ function initParallelChart() {
 
     // We will plot ALL features, not just active features
     // but users can reorder or we just stick to allFeatures map.
-    const margin = { top: 40, right: 40, bottom: 30, left: 40 };
-    const width = document.getElementById("parallelChartContainer").clientWidth - margin.left - margin.right;
+    const margin = { top: 60, right: 50, bottom: 40, left: 50 };
+    const containerEl = document.getElementById("parallelChartContainer");
+    const width = containerEl.clientWidth - margin.left - margin.right;
     const height = 500 - margin.top - margin.bottom;
 
     const svg = container.append("svg")
         .attr("width", "100%")
-        .attr("height", height + margin.top + margin.bottom)
+        .attr("height", 500)
         .on("click", (event) => {
-            // Deselect if clicking on the background (svg or g)
             if (event.target.tagName === 'svg' || event.target.tagName === 'rect') {
                 selectedTrack = null;
                 d3.select("#songDropdown").property("value", "");
@@ -2721,26 +2724,27 @@ function initParallelChart() {
             .range([height, 0]);
     });
 
-    // Draw the lines group FIRST so it sits behind the axes
-    const linesGroup = svg.append("g").attr("class", "parallel-lines");
-    const highlightGroup = svg.append("g").attr("class", "parallel-highlight");
+    // Draw the lines group FIRST so it sits behind the axes - nested inside G
+    const linesGroup = g.append("g").attr("class", "parallel-lines");
+    const highlightGroup = g.append("g").attr("class", "parallel-highlight");
 
-    // Draw the axes
+    // Draw the axes - nested inside G
     audioMetrics.forEach(f => {
-        const axisGroup = svg.append("g")
+        const axisGroup = g.append("g")
             .attr("transform", `translate(${x(f)}, 0)`)
             .attr("class", "parallel-axis");
 
         axisGroup.call(d3.axisLeft(y[f]).ticks(5).tickSize(-4).tickPadding(8))
             .selectAll("text")
             .style("fill", "var(--text-secondary)")
-            .style("font-size", "9px");
+            .style("font-size", "10px");
 
         axisGroup.append("text")
-            .attr("y", -15)
+            .attr("y", -20)
             .style("text-anchor", "middle")
             .style("fill", "var(--text-primary)")
             .style("font-weight", "bold")
+            .style("font-size", "11px")
             .style("text-transform", "capitalize")
             .style("cursor", "grab")
             .text(f);
@@ -3202,7 +3206,6 @@ function initKeyChart() {
         // LEVEL 1: RADIAL ROSE CHART (Key selection)
         backBtn.style("display", "none");
         d3.select("#keySentimentLegend").style("display", "none"); // Hide sentiment legend in Key view
-        g.selectAll('.key-segment, .key-count-label, .key-label, .radial-guide, .key-song-bubble, .mode-bubble').remove();
         keyChartSvg.selectAll(".key-chart-header").remove();
 
         const rollup = d3.rollup(plotData, v => v.length, d => d.key);
@@ -3234,41 +3237,50 @@ function initKeyChart() {
             .style('fill', 'none').style('stroke', 'rgba(255,255,255,0.08)').style('stroke-dasharray', '4,4');
 
         const segments = g.selectAll('.key-segment').data(keysData, d => d.key);
+
         segments.join(
             enter => enter.append('path')
                 .attr('class', 'key-segment')
-                .attr('d', arc)
-                .style('fill', d => colorScale(d.count))
-                .style('stroke', 'rgba(255,255,255,0.1)')
                 .style('cursor', 'pointer')
                 .style('opacity', 0)
         )
             .on('click', (event, d) => { keyChartActiveKey = d.key; initKeyChart(); })
             .on('mouseover', function (event, d) {
-                d3.select(this).style('fill', '#fff').style('stroke', '#fff');
                 const tTip = d3.select('#tooltip');
-                tTip.transition().duration(200).style('opacity', 1);
-                tTip.html(`<div class="tooltip-title">Key: ${d.label}</div><div style="font-size:1.1rem; color:var(--accent); font-weight:bold;">${d.count} Songs</div>`).style('left', (event.pageX + 15) + 'px').style('top', (event.pageY - 28) + 'px');
+                tTip.transition().duration(100).style('opacity', 1);
+                tTip.html(`<div class="tooltip-title">Key: ${d.label}</div><div style="font-size:1.1rem; color:var(--accent); font-weight:bold;">${d.count} Songs</div>`)
+                    .style('left', (event.pageX + 15) + 'px').style('top', (event.pageY - 28) + 'px');
+                d3.select(this).style('fill', '#fff').style('stroke', '#fff');
             })
             .on('mouseout', function (event, d) {
-                d3.select(this).style('fill', colorScale(d.count)).style('stroke', 'rgba(255,255,255,0.1)');
-                d3.select('#tooltip').transition().duration(500).style('opacity', 0);
+                const isSel = selectedTrack && +selectedTrack.key === +d.key;
+                const baseFill = isSel ? (selectedTrack.mode === 1 ? '#22d3ee' : '#f472b6') : colorScale(d.count);
+                const baseStroke = isSel ? '#fff' : 'rgba(255,255,255,0.1)';
+                d3.select(this).style('fill', baseFill).style('stroke', baseStroke);
+                d3.select('#tooltip').transition().duration(300).style('opacity', 0);
             })
+            // Apply immediate styles first to ensure responsiveness on first click
             .attr('d', arc)
             .style('fill', d => {
-                if (selectedTrack && selectedTrack.key === d.key) {
-                    return selectedTrack.mode === 1 ? '#2dd4bf' : '#fb7185';
+                if (selectedTrack && +selectedTrack.key === +d.key) {
+                    return (selectedTrack.mode === 1) ? '#22d3ee' : '#f472b6';
                 }
                 return colorScale(d.count);
             })
-            .style('stroke', d => (selectedTrack && selectedTrack.key === d.key) ? '#fff' : 'rgba(255,255,255,0.1)')
-            .style('stroke-width', d => (selectedTrack && selectedTrack.key === d.key) ? '2px' : '1px')
-            .style('filter', d => (selectedTrack && selectedTrack.key === d.key) ? `drop-shadow(0 0 8px ${selectedTrack.mode === 1 ? '#2dd4bf' : '#fb7185'})` : 'none')
-            .style('opacity', d => {
-                if (selectedTrack) {
-                    return selectedTrack.key === d.key ? 1 : 0.3;
+            .style('stroke', d => (selectedTrack && +selectedTrack.key === +d.key) ? '#fff' : 'rgba(255,255,255,0.1)')
+            .style('stroke-width', d => (selectedTrack && +selectedTrack.key === +d.key) ? '2px' : '1px')
+            .style('filter', d => {
+                if (selectedTrack && +selectedTrack.key === +d.key) {
+                    const col = (selectedTrack.mode === 1) ? '#22d3ee' : '#f472b6';
+                    return `drop-shadow(0 0 10px ${col})`;
                 }
-                return 1;
+                return 'none';
+            })
+            // Then transition the opacity
+            .transition().duration(600)
+            .style('opacity', d => {
+                if (selectedTrack) return (+selectedTrack.key === +d.key) ? 1 : 0.35;
+                return 0.85;
             });
 
         g.selectAll('.key-count-label').data(keysData, d => d.key).join('text')
