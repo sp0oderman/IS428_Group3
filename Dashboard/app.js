@@ -303,6 +303,7 @@ function computeStats() {
 }
 
 function filterByYear(year, animated = false) {
+    selectedTopic = null; // CANCEL TOPIC FILTER ON YEAR CHANGE
     globalAnimationDuration = animated ? 800 : 0;
     selectedYear = year;
     applyFilters();
@@ -386,6 +387,7 @@ function toggleSongSelection(track) {
     if (!track) {
         selectedTrack = null;
         comparisonTrack = null;
+        selectedTopic = null; // CANCEL TOPIC FILTER ON DESELECT
     } else {
         const isPrimary = selectedTrack && selectedTrack.Title === track.Title;
         const isComparison = comparisonTrack && comparisonTrack.Title === track.Title;
@@ -410,6 +412,16 @@ function toggleSongSelection(track) {
             }
         }
     }
+
+    // SYNC TOPIC TREND SELECTION
+    if (selectedTrack) {
+        selectedTopic = selectedTrack.Topic;
+    } else if (comparisonTrack) {
+        selectedTopic = comparisonTrack.Topic;
+    } else {
+        selectedTopic = null;
+    }
+    
     updateDashboard();
 }
 
@@ -1921,15 +1933,22 @@ function initBubbleChart() {
             .attr("class", d => "bubble-node-" + safeId(d.data.data.Title))
             .style("fill", colorScale(artistData.name)) // Reuse parent artist color
             .style("opacity", d => {
-                const isSel = selectedTrack && selectedTrack.Title === d.data.data.Title;
-                const isComp = comparisonTrack && comparisonTrack.Title === d.data.data.Title;
-                return (isSel || isComp) ? 1 : 0.6;
+                const isSel = (selectedTrack && selectedTrack.Title === d.data.data.Title);
+                const isComp = (comparisonTrack && comparisonTrack.Title === d.data.data.Title);
+                const hasAnySelection = selectedTrack || comparisonTrack;
+                
+                if (isSel || isComp) return 1;
+                return hasAnySelection ? 0.15 : 0.6; // High isolation if a song is selected
             })
-            .on("mouseover", function () { d3.select(this).transition().duration(200).style("opacity", 1).attr("r", (d3.select(this).datum().r * 0.95) * 1.05); })
+            .on("mouseover", function (event, d) { 
+                d3.select(this).transition().duration(200).style("opacity", 1).attr("r", (d.r * 0.95) * 1.05); 
+            })
             .on("mouseout", function (event, d) {
-                const isSel = selectedTrack && selectedTrack.Title === d.data.data.Title;
-                const isComp = comparisonTrack && comparisonTrack.Title === d.data.data.Title;
-                d3.select(this).transition().duration(200).style("opacity", (isSel || isComp) ? 1 : 0.6).attr("r", d.r * 0.95);
+                const isSel = (selectedTrack && selectedTrack.Title === d.data.data.Title);
+                const isComp = (comparisonTrack && comparisonTrack.Title === d.data.data.Title);
+                const hasAnySelection = selectedTrack || comparisonTrack;
+                
+                d3.select(this).transition().duration(200).style("opacity", (isSel || isComp) ? 1 : (hasAnySelection ? 0.15 : 0.6)).attr("r", d.r * 0.95);
             })
             .transition().duration(500)
             .delay((d, i) => i * 15)
@@ -2728,15 +2747,16 @@ function initMixer() {
             .style("text-transform", "uppercase")
             .style("font-weight", "bold")
             .style("text-align", "center")
-            .style("height", "24px")
+            .style("height", "34px") // Fits 2 lines
+            .style("display", "flex")
+            .style("align-items", "center")
+            .style("justify-content", "center")
             .style("pointer-events", "none")
-            .style("margin-top", "4px")
             .html(f.bottom.replace('\n', '<br>'));
 
         let nameDiv = trackDiv.append("div")
             .style("font-size", "12px")
             .style("color", f.color)
-            .style("margin-top", "5px")
             .style("text-transform", "capitalize")
             .style("font-weight", "bold")
             .style("letter-spacing", "1px")
@@ -3406,7 +3426,7 @@ function initKeyChart() {
         const volumeScaleMajor = d3.scaleSqrt()
             .domain([0, maxCount])
             .range([8, outerRadius - midRadius - 5]);
-            
+
         const volumeScaleMinor = d3.scaleSqrt()
             .domain([0, maxCount])
             .range([8, midRadius - innerRadius - 5]);
@@ -3566,6 +3586,16 @@ function initKeyChart() {
         d3.select("#keySentimentLegend").style("display", "flex");
         g.selectAll("*").remove();
 
+        // 0. Background Area for click-to-deselect
+        g.append("rect")
+            .attr("x", -width / 2).attr("y", -height / 2)
+            .attr("width", width).attr("height", height)
+            .attr("fill", "transparent")
+            .on("click", (event) => {
+                toggleSongSelection(null);
+                d3.select("#songDropdown").property("value", "");
+            });
+
         // 1. AESTHETIC WATERMARK (Background Label)
         g.append("text")
             .attr("x", 0)
@@ -3598,14 +3628,29 @@ function initKeyChart() {
         const dotsEnter = dots.enter().append('circle')
             .attr('class', 'key-song-bubble')
             .attr('r', d => d.r)
-            .style('fill', color)
-            .style('opacity', d => 0.4 + (d.Sentiment_Score + 1) / 4)
+            .style('fill', d => {
+                const isSel = (selectedTrack && selectedTrack.Title === d.Title);
+                const isComp = (comparisonTrack && comparisonTrack.Title === d.Title);
+                if (isSel) return '#38bdf8'; // Primary (Light Blue)
+                if (isComp) return '#f472b6'; // Comparison (Pink)
+                return color; 
+            })
+            .style('opacity', d => {
+                const isSel = (selectedTrack && selectedTrack.Title === d.Title);
+                const isComp = (comparisonTrack && comparisonTrack.Title === d.Title);
+                if (isSel || isComp) return 1;
+                return (0.4 + (d.Sentiment_Score + 1) / 4);
+            })
             .style('stroke', '#fff')
-            .style('stroke-opacity', 0)
+            .style('stroke-opacity', d => {
+                const isSel = (selectedTrack && selectedTrack.Title === d.Title);
+                const isComp = (comparisonTrack && comparisonTrack.Title === d.Title);
+                return (isSel || isComp) ? 1 : 0;
+            })
             .style('stroke-width', 2)
             .style('cursor', 'pointer')
             .on('mouseover', function (event, d) {
-                d3.select(this).raise().style('stroke-opacity', 1).attr('r', d.r + 3);
+                d3.select(this).raise().style('stroke-opacity', 1).attr('r', d.r + 3).style('opacity', 1);
                 const tTip = d3.select('#tooltip');
                 tTip.transition().duration(200).style('opacity', 1);
                 tTip.html(`
@@ -3618,8 +3663,11 @@ function initKeyChart() {
                 `).style('left', (event.pageX + 15) + 'px').style('top', (event.pageY - 28) + 'px');
             })
             .on('mouseout', function (event, d) {
-                const isSel = selectedTrack && selectedTrack.Title === d.Title;
-                d3.select(this).style('stroke-opacity', isSel ? 1 : 0).attr('r', isSel ? d.r + 3 : d.r);
+                const isSel = (selectedTrack && selectedTrack.Title === d.Title);
+                const isComp = (comparisonTrack && comparisonTrack.Title === d.Title);
+                d3.select(this).style('stroke-opacity', (isSel || isComp) ? 1 : 0)
+                    .attr('r', (isSel || isComp) ? d.r + 3 : d.r)
+                    .style('opacity', (isSel || isComp) ? 1 : (0.4 + (d.Sentiment_Score + 1) / 4));
                 d3.select('#tooltip').transition().duration(500).style('opacity', 0);
             })
             .on('click', function (event, d) {
@@ -4289,12 +4337,26 @@ function updateTopicEvolutionChart() {
             // Revert Label: Theme-specific color OR bright highlight if selected
             gLabels.selectAll(".stream-label").filter(ld => ld.key === d.key)
                 .transition().duration(400)
-                .style("fill", ld => (selectedTopic === ld.key) ? "#fff" : topicColors[ld.key])
-                .style("opacity", ld => {
-                    if (!selectedTopic) return 0.6;
-                    return (selectedTopic === ld.key) ? 1 : 0.1;
+                .style("fill", ld => {
+                    const isHigh = (selectedTopic === ld.key) || 
+                                   (selectedTrack && selectedTrack.Topic === ld.key) || 
+                                   (comparisonTrack && comparisonTrack.Topic === ld.key);
+                    return isHigh ? "#fff" : topicColors[ld.key];
                 })
-                .style("filter", ld => (selectedTopic === ld.key) ? "drop-shadow(0 0 8px rgba(255,255,255,0.8))" : "none")
+                .style("opacity", ld => {
+                    const noSel = !selectedTopic && !selectedTrack && !comparisonTrack;
+                    if (noSel) return 0.6;
+                    const isHigh = (selectedTopic === ld.key) || 
+                                   (selectedTrack && selectedTrack.Topic === ld.key) || 
+                                   (comparisonTrack && comparisonTrack.Topic === ld.key);
+                    return isHigh ? 1 : 0.1;
+                })
+                .style("filter", ld => {
+                    const isHigh = (selectedTopic === ld.key) || 
+                                   (selectedTrack && selectedTrack.Topic === ld.key) || 
+                                   (comparisonTrack && comparisonTrack.Topic === ld.key);
+                    return isHigh ? "drop-shadow(0 0 8px rgba(255,255,255,0.8))" : "none";
+                })
                 .select("textPath")
                 .text(d.key);
         })
@@ -4302,10 +4364,20 @@ function updateTopicEvolutionChart() {
             const [mx] = d3.pointer(event);
             const year = Math.round(x.invert(mx));
 
-            selectedTopic = d.key;
-            selectedYear = year;
-            selectedWordCategory = null; // MUTUAL EXCLUSION
+            // TOGGLE LOGIC: Click again to deselect
+            if (selectedTopic === d.key) {
+                selectedTopic = null;
+            } else {
+                selectedTopic = d.key;
+                selectedYear = year;
+            }
 
+            // EXCLUSIVE SELECTION: Clear individual song tracks when focusing on topics
+            selectedTrack = null;
+            comparisonTrack = null;
+
+            selectedWordCategory = null; // MUTUAL EXCLUSION
+            
             updateDashboard(); // Immediately clear embed and radar specifics
 
             // Sync related charts for the exclusive selection
@@ -4334,8 +4406,14 @@ function updateTopicEvolutionChart() {
         .transition().duration(800)
         .attr("d", areaArea)
         .style("opacity", d => {
-            if (!selectedTopic) return 0.7;
-            return (selectedTopic === d.key) ? 0.95 : 0.15;
+            const hasTopicSel = (selectedTopic === d.key);
+            const hasTrackSel = (selectedTrack && selectedTrack.Topic === d.key);
+            const hasCompSel = (comparisonTrack && comparisonTrack.Topic === d.key);
+            
+            const isHighlighted = hasTopicSel || hasTrackSel || hasCompSel;
+            
+            if (!selectedTopic && !selectedTrack && !comparisonTrack) return 0.7;
+            return isHighlighted ? 0.95 : 0.15;
         });
 
     // 5. Selection Highlight
@@ -4481,7 +4559,12 @@ function updateTopicEvolutionChart() {
 
     mergedLabels
         .transition().duration(800)
-        .style("fill", d => (selectedTopic === d.key) ? "#fff" : topicColors[d.key])
+        .style("fill", d => {
+            const isHigh = (selectedTopic === d.key) || 
+                           (selectedTrack && selectedTrack.Topic === d.key) || 
+                           (comparisonTrack && comparisonTrack.Topic === d.key);
+            return isHigh ? "#fff" : topicColors[d.key];
+        })
         .style("font-size", d => {
             // Fill height: Uses 85% of available central height
             let size = Math.min(d.pxHeight * 0.85, 60);
@@ -4493,10 +4576,19 @@ function updateTopicEvolutionChart() {
             return Math.max(size, 8) + "px";
         })
         .style("opacity", d => {
-            if (!selectedTopic) return 0.6;
-            return (selectedTopic === d.key) ? 1 : 0.1;
+            const noSel = !selectedTopic && !selectedTrack && !comparisonTrack;
+            if (noSel) return 0.6;
+            const isHigh = (selectedTopic === d.key) || 
+                           (selectedTrack && selectedTrack.Topic === d.key) || 
+                           (comparisonTrack && comparisonTrack.Topic === d.key);
+            return isHigh ? 1 : 0.1;
         })
-        .style("filter", d => (selectedTopic === d.key) ? "drop-shadow(0 0 10px rgba(255,255,255,0.9))" : "none");
+        .style("filter", d => {
+            const isHigh = (selectedTopic === d.key) || 
+                           (selectedTrack && selectedTrack.Topic === d.key) || 
+                           (comparisonTrack && comparisonTrack.Topic === d.key);
+            return isHigh ? "drop-shadow(0 0 10px rgba(255,255,255,0.9))" : "none";
+        });
 
     mergedLabels.select("textPath")
         .transition().duration(800)
