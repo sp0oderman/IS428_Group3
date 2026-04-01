@@ -400,16 +400,11 @@ function toggleSongSelection(track) {
             // Deselect Comparison
             comparisonTrack = null;
         } else {
-            // New Selection
-            if (!selectedTrack) {
-                selectedTrack = track;
-            } else if (!comparisonTrack) {
-                comparisonTrack = track;
-            } else {
-                // FIFO: Replace oldest (Primary), Move Comparison to Primary, New to Comparison
-                selectedTrack = comparisonTrack;
-                comparisonTrack = track;
+            // New Selection: Shift previous primary into comparison slot, new becomes primary
+            if (selectedTrack) {
+                comparisonTrack = selectedTrack;
             }
+            selectedTrack = track;
         }
     }
 
@@ -421,7 +416,7 @@ function toggleSongSelection(track) {
     } else {
         selectedTopic = null;
     }
-    
+
     updateDashboard();
 }
 
@@ -1936,18 +1931,18 @@ function initBubbleChart() {
                 const isSel = (selectedTrack && selectedTrack.Title === d.data.data.Title);
                 const isComp = (comparisonTrack && comparisonTrack.Title === d.data.data.Title);
                 const hasAnySelection = selectedTrack || comparisonTrack;
-                
+
                 if (isSel || isComp) return 1;
                 return hasAnySelection ? 0.15 : 0.6; // High isolation if a song is selected
             })
-            .on("mouseover", function (event, d) { 
-                d3.select(this).transition().duration(200).style("opacity", 1).attr("r", (d.r * 0.95) * 1.05); 
+            .on("mouseover", function (event, d) {
+                d3.select(this).transition().duration(200).style("opacity", 1).attr("r", (d.r * 0.95) * 1.05);
             })
             .on("mouseout", function (event, d) {
                 const isSel = (selectedTrack && selectedTrack.Title === d.data.data.Title);
                 const isComp = (comparisonTrack && comparisonTrack.Title === d.data.data.Title);
                 const hasAnySelection = selectedTrack || comparisonTrack;
-                
+
                 d3.select(this).transition().duration(200).style("opacity", (isSel || isComp) ? 1 : (hasAnySelection ? 0.15 : 0.6)).attr("r", d.r * 0.95);
             })
             .transition().duration(500)
@@ -3633,7 +3628,7 @@ function initKeyChart() {
                 const isComp = (comparisonTrack && comparisonTrack.Title === d.Title);
                 if (isSel) return '#38bdf8'; // Primary (Light Blue)
                 if (isComp) return '#f472b6'; // Comparison (Pink)
-                return color; 
+                return color;
             })
             .style('opacity', d => {
                 const isSel = (selectedTrack && selectedTrack.Title === d.Title);
@@ -4338,23 +4333,23 @@ function updateTopicEvolutionChart() {
             gLabels.selectAll(".stream-label").filter(ld => ld.key === d.key)
                 .transition().duration(400)
                 .style("fill", ld => {
-                    const isHigh = (selectedTopic === ld.key) || 
-                                   (selectedTrack && selectedTrack.Topic === ld.key) || 
-                                   (comparisonTrack && comparisonTrack.Topic === ld.key);
+                    const isHigh = (selectedTopic === ld.key) ||
+                        (selectedTrack && selectedTrack.Topic === ld.key) ||
+                        (comparisonTrack && comparisonTrack.Topic === ld.key);
                     return isHigh ? "#fff" : topicColors[ld.key];
                 })
                 .style("opacity", ld => {
                     const noSel = !selectedTopic && !selectedTrack && !comparisonTrack;
                     if (noSel) return 0.6;
-                    const isHigh = (selectedTopic === ld.key) || 
-                                   (selectedTrack && selectedTrack.Topic === ld.key) || 
-                                   (comparisonTrack && comparisonTrack.Topic === ld.key);
+                    const isHigh = (selectedTopic === ld.key) ||
+                        (selectedTrack && selectedTrack.Topic === ld.key) ||
+                        (comparisonTrack && comparisonTrack.Topic === ld.key);
                     return isHigh ? 1 : 0.1;
                 })
                 .style("filter", ld => {
-                    const isHigh = (selectedTopic === ld.key) || 
-                                   (selectedTrack && selectedTrack.Topic === ld.key) || 
-                                   (comparisonTrack && comparisonTrack.Topic === ld.key);
+                    const isHigh = (selectedTopic === ld.key) ||
+                        (selectedTrack && selectedTrack.Topic === ld.key) ||
+                        (comparisonTrack && comparisonTrack.Topic === ld.key);
                     return isHigh ? "drop-shadow(0 0 8px rgba(255,255,255,0.8))" : "none";
                 })
                 .select("textPath")
@@ -4377,7 +4372,7 @@ function updateTopicEvolutionChart() {
             comparisonTrack = null;
 
             selectedWordCategory = null; // MUTUAL EXCLUSION
-            
+
             updateDashboard(); // Immediately clear embed and radar specifics
 
             // Sync related charts for the exclusive selection
@@ -4409,9 +4404,9 @@ function updateTopicEvolutionChart() {
             const hasTopicSel = (selectedTopic === d.key);
             const hasTrackSel = (selectedTrack && selectedTrack.Topic === d.key);
             const hasCompSel = (comparisonTrack && comparisonTrack.Topic === d.key);
-            
+
             const isHighlighted = hasTopicSel || hasTrackSel || hasCompSel;
-            
+
             if (!selectedTopic && !selectedTrack && !comparisonTrack) return 0.7;
             return isHighlighted ? 0.95 : 0.15;
         });
@@ -4560,9 +4555,9 @@ function updateTopicEvolutionChart() {
     mergedLabels
         .transition().duration(800)
         .style("fill", d => {
-            const isHigh = (selectedTopic === d.key) || 
-                           (selectedTrack && selectedTrack.Topic === d.key) || 
-                           (comparisonTrack && comparisonTrack.Topic === d.key);
+            const isHigh = (selectedTopic === d.key) ||
+                (selectedTrack && selectedTrack.Topic === d.key) ||
+                (comparisonTrack && comparisonTrack.Topic === d.key);
             return isHigh ? "#fff" : topicColors[d.key];
         })
         .style("font-size", d => {
@@ -4578,15 +4573,15 @@ function updateTopicEvolutionChart() {
         .style("opacity", d => {
             const noSel = !selectedTopic && !selectedTrack && !comparisonTrack;
             if (noSel) return 0.6;
-            const isHigh = (selectedTopic === d.key) || 
-                           (selectedTrack && selectedTrack.Topic === d.key) || 
-                           (comparisonTrack && comparisonTrack.Topic === d.key);
+            const isHigh = (selectedTopic === d.key) ||
+                (selectedTrack && selectedTrack.Topic === d.key) ||
+                (comparisonTrack && comparisonTrack.Topic === d.key);
             return isHigh ? 1 : 0.1;
         })
         .style("filter", d => {
-            const isHigh = (selectedTopic === d.key) || 
-                           (selectedTrack && selectedTrack.Topic === d.key) || 
-                           (comparisonTrack && comparisonTrack.Topic === d.key);
+            const isHigh = (selectedTopic === d.key) ||
+                (selectedTrack && selectedTrack.Topic === d.key) ||
+                (comparisonTrack && comparisonTrack.Topic === d.key);
             return isHigh ? "drop-shadow(0 0 10px rgba(255,255,255,0.9))" : "none";
         });
 
