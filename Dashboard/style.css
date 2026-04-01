@@ -7,8 +7,10 @@
     --accent: #38bdf8;
     --avg-color: rgba(148, 163, 184, 0.4);
     --avg-stroke: #94a3b8;
-    --sel-color: rgba(56, 189, 248, 0.5);
-    --sel-stroke: #38bdf8;
+    --sel-color: rgba(236, 72, 153, 0.8); /* Sonic Pink - Now Primary #ec4899 */
+    --sel-stroke: #ec4899;
+    --comp-color: rgba(125, 211, 252, 0.82); /* Luminous Sky Blue - Now Comparison #7dd3fc */
+    --comp-stroke: #7dd3fc;
 }
 
 * {
@@ -222,6 +224,7 @@ select {
     border-radius: 12px;
     margin-bottom: 25px;
     border: 1px solid rgba(255, 255, 255, 0.05);
+    position: relative;
 }
 
 #artistBarChartContainer {

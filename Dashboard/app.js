@@ -3,6 +3,7 @@ let originalDataset = [];
 let dataset = [];
 let globalAverages = {};
 let selectedTrack = null;
+let comparisonTrack = null; // SLOT 2 for Comparison Mode
 let selectedTopic = null;
 let globalAnimationDuration = 0;
 let minYear;
@@ -304,10 +305,6 @@ function computeStats() {
 function filterByYear(year, animated = false) {
     globalAnimationDuration = animated ? 800 : 0;
     selectedYear = year;
-
-    selectedTrack = null;
-    d3.select("#songDropdown").property("value", "");
-
     applyFilters();
 }
 
@@ -385,20 +382,56 @@ function applyFilters() {
     }, 10);
 }
 
-function updateDashboard() {
-    if (selectedTrack) {
-        d3.select("#radarSelectedLabel").text(selectedTrack.Title);
-        if (selectedTrack.href) {
-            const embedUrl = selectedTrack.href.replace("/track/", "/embed/track/");
-            const iframe = d3.select("#spotifyIframe");
-            if (iframe.attr("src") !== embedUrl) {
-                iframe.attr("src", embedUrl);
-            }
-            d3.select("#spotifyEmbedContainer").style("display", "block");
-            d3.select("#spotifyEmbedPlaceholder").style("display", "none");
-        }
+function toggleSongSelection(track) {
+    if (!track) {
+        selectedTrack = null;
+        comparisonTrack = null;
     } else {
-        d3.select("#radarSelectedLabel").text("Selected Track");
+        const isPrimary = selectedTrack && selectedTrack.Title === track.Title;
+        const isComparison = comparisonTrack && comparisonTrack.Title === track.Title;
+
+        if (isPrimary) {
+            // Deselect Primary -> Shift Comparison to Primary
+            selectedTrack = comparisonTrack;
+            comparisonTrack = null;
+        } else if (isComparison) {
+            // Deselect Comparison
+            comparisonTrack = null;
+        } else {
+            // New Selection
+            if (!selectedTrack) {
+                selectedTrack = track;
+            } else if (!comparisonTrack) {
+                comparisonTrack = track;
+            } else {
+                // FIFO: Replace oldest (Primary), Move Comparison to Primary, New to Comparison
+                selectedTrack = comparisonTrack;
+                comparisonTrack = track;
+            }
+        }
+    }
+    updateDashboard();
+}
+
+function updateDashboard() {
+    const label = d3.select("#radarSelectedLabel");
+    if (selectedTrack && comparisonTrack) {
+        label.text(`${selectedTrack.Title} vs ${comparisonTrack.Title}`);
+    } else if (selectedTrack) {
+        label.text(selectedTrack.Title);
+    } else {
+        label.text("Track Comparison");
+    }
+
+    if (selectedTrack && selectedTrack.href) {
+        const embedUrl = selectedTrack.href.replace("/track/", "/embed/track/");
+        const iframe = d3.select("#spotifyIframe");
+        if (iframe.attr("src") !== embedUrl) {
+            iframe.attr("src", embedUrl);
+        }
+        d3.select("#spotifyEmbedContainer").style("display", "block");
+        d3.select("#spotifyEmbedPlaceholder").style("display", "none");
+    } else {
         d3.select("#spotifyEmbedContainer").style("display", "none");
         d3.select("#spotifyEmbedPlaceholder").style("display", "flex");
         d3.select("#spotifyIframe").attr("src", "");
@@ -526,9 +559,8 @@ function initOneBubbleChart(cfg) {
         .attr('height', size + margin.top + margin.bottom)
         .style('display', 'block')
         .on('click', function () {
-            selectedTrack = null;
+            toggleSongSelection(null);
             d3.select("#songDropdown").property("value", "");
-            updateDashboard();
         });
 
     const svg = rootSvg.append('g')
@@ -747,36 +779,55 @@ function updateOneBubbleChart(cfg) {
                 .style('top', (event.pageY - 28) + 'px');
         })
         .on('mouseout', function (event, d) {
-            // Restore all bubbles to context-aware opacity
+            // Restore all bubbles to context-aware opacity and highlighting
             cfg.dotGroup.selectAll('.feature-bubble')
                 .style('stroke-width', p => {
                     const isSel = selectedTrack && selectedTrack.Title === p.Title;
-                    return isSel ? 2.5 : 0.8;
+                    const isComp = comparisonTrack && comparisonTrack.Title === p.Title;
+                    return (isSel || isComp) ? 2.5 : 0.8;
                 })
                 .style('opacity', p => {
+                    if (!selectedTrack && !comparisonTrack) return 0.55;
                     const isSel = selectedTrack && selectedTrack.Title === p.Title;
-                    if (selectedTrack) {
-                        return isSel ? 1 : 0.15;
-                    }
-                    return 0.55;
+                    const isComp = comparisonTrack && comparisonTrack.Title === p.Title;
+                    return (isSel || isComp) ? 1 : 0.15;
                 });
 
             tTip.transition().duration(500).style('opacity', 0);
         })
         .on('click', function (event, d) {
             event.stopPropagation();
-            selectedTrack = (selectedTrack && selectedTrack.Title === d.Title) ? null : d;
-            updateDashboard();
+            toggleSongSelection(d);
         })
         .merge(dots)
         .transition().duration(globalAnimationDuration)
         .attr('cx', d => cfg.x(d[xF]))
         .attr('cy', d => cfg.y(d[yF]))
         .attr('r', d => cfg.r(sF === 'Streams' ? d.Streams : d[sF]))
-        .style('fill', d => (selectedTrack && selectedTrack.Title === d.Title) ? '#ec4899' : 'var(--accent)')
-        .style('stroke', d => (selectedTrack && selectedTrack.Title === d.Title) ? '#fff' : '#fff')
-        .style('stroke-width', d => (selectedTrack && selectedTrack.Title === d.Title) ? 2.5 : 0.8)
-        .style('opacity', d => selectedTrack ? (d.Title === selectedTrack.Title ? 1 : 0.15) : 0.55);
+        .style('fill', d => {
+            if (selectedTrack && d.Title === selectedTrack.Title) return 'var(--sel-stroke)';
+            if (comparisonTrack && d.Title === comparisonTrack.Title) return 'var(--comp-stroke)';
+            return 'var(--accent)';
+        })
+        .style('stroke', '#fff')
+        .style('stroke-width', d => {
+            const isSel = selectedTrack && d.Title === selectedTrack.Title;
+            const isComp = comparisonTrack && d.Title === comparisonTrack.Title;
+            return (isSel || isComp) ? 2.5 : 0.8;
+        })
+        .style('filter', d => {
+            const isSel = selectedTrack && d.Title === selectedTrack.Title;
+            const isComp = comparisonTrack && d.Title === comparisonTrack.Title;
+            if (isSel) return "drop-shadow(0 0 8px var(--sel-stroke))";
+            if (isComp) return "drop-shadow(0 0 8px var(--comp-stroke))";
+            return "none";
+        })
+        .style('opacity', d => {
+            if (!selectedTrack && !comparisonTrack) return 0.55;
+            const isSel = selectedTrack && d.Title === selectedTrack.Title;
+            const isComp = comparisonTrack && d.Title === comparisonTrack.Title;
+            return (isSel || isComp) ? 1 : 0.15;
+        });
 
     // -- Average Marker: Radiant Yellow crosshair (Option C) --
     const ax = cfg.x(avgX);
@@ -1378,14 +1429,7 @@ function updateScatterPlots() {
                 tooltip.transition().duration(500).style("opacity", 0);
             })
             .on("click", function (event, d) {
-                if (selectedTrack && selectedTrack.Title === d.Title) {
-                    selectedTrack = null;
-                    d3.select("#songDropdown").property("value", "");
-                } else {
-                    selectedTrack = d;
-                    const opt = d3.select("#songDropdown").selectAll("option").filter((o, i) => o && (o === d || o.id === d.id || o.Title === d.Title)).node();
-                    if (opt) d3.select("#songDropdown").property("value", opt.value);
-                }
+                toggleSongSelection(d);
                 updateDashboard();
             })
             .merge(dots)
@@ -1451,12 +1495,19 @@ function buildRadarLayout() {
     // Add SVG Filters for Glow
     const defs = radarSvg.append("defs");
 
-    // Selection Glow
-    const filterSelect = defs.append("filter").attr("id", "radarSelectionGlow").attr("height", "300%").attr("width", "300%").attr("x", "-100%").attr("y", "-100%");
-    filterSelect.append("feGaussianBlur").attr("stdDeviation", "4.5").attr("result", "coloredBlur");
-    const feMergeSelect = filterSelect.append("feMerge");
-    feMergeSelect.append("feMergeNode").attr("in", "coloredBlur");
-    feMergeSelect.append("feMergeNode").attr("in", "SourceGraphic");
+    // Selection Glow A (Primary)
+    const filterSelectA = defs.append("filter").attr("id", "radarSelectionGlow").attr("height", "400%").attr("width", "400%").attr("x", "-150%").attr("y", "-150%");
+    filterSelectA.append("feGaussianBlur").attr("stdDeviation", "7.0").attr("result", "coloredBlur");
+    const feMergeSelectA = filterSelectA.append("feMerge");
+    feMergeSelectA.append("feMergeNode").attr("in", "coloredBlur");
+    feMergeSelectA.append("feMergeNode").attr("in", "SourceGraphic");
+
+    // Selection Glow B (Comparison)
+    const filterSelectB = defs.append("filter").attr("id", "radarComparisonGlow").attr("height", "400%").attr("width", "400%").attr("x", "-150%").attr("y", "-150%");
+    filterSelectB.append("feGaussianBlur").attr("stdDeviation", "9.0").attr("result", "coloredBlur");
+    const feMergeSelectB = filterSelectB.append("feMerge");
+    feMergeSelectB.append("feMergeNode").attr("in", "coloredBlur");
+    feMergeSelectB.append("feMergeNode").attr("in", "SourceGraphic");
 
     // Standard Glow
     const filterStd = defs.append("filter").attr("id", "radarStdGlow");
@@ -1467,6 +1518,35 @@ function buildRadarLayout() {
 
     radarSvg = radarSvg.append("g")
         .attr("transform", "translate(" + (radarConfig.w / 2 + radarConfig.margin.left) + "," + (radarConfig.h / 2 + radarConfig.margin.top) + ")");
+
+    // 8. IDEMPOTENT RESET ICON (TOP RIGHT)
+    let resetBtn = d3.select("#radarChartContainer").select("#radarResetBtn");
+    if (resetBtn.empty()) {
+        resetBtn = d3.select("#radarChartContainer").append("div")
+            .attr("id", "radarResetBtn")
+            .style("position", "absolute")
+            .style("top", "4px")
+            .style("right", "4px")
+            .style("cursor", "pointer")
+            .style("z-index", "10")
+            .style("padding", "6px")
+            .style("background", "rgba(255,255,255,0.05)")
+            .style("border-radius", "8px")
+            .style("transition", "all 0.2s")
+            .style("display", "none")
+            .html(`
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block; opacity: 0.6;">
+                    <path d="M18 6L6 18M6 6l12 12"/>
+                </svg>
+            `)
+            .on("mouseenter", function() { d3.select(this).style("background", "rgba(255,255,255,0.1)").select("svg").style("opacity", "1"); })
+            .on("mouseleave", function() { d3.select(this).style("background", "rgba(255,255,255,0.05)").select("svg").style("opacity", "0.6"); });
+    }
+
+    resetBtn.on("click", () => {
+        toggleSongSelection(null);
+        d3.select("#songDropdown").property("value", "");
+    });
 }
 
 function getNormalizedRadarData(trackObj) {
@@ -1478,20 +1558,25 @@ function getNormalizedRadarData(trackObj) {
 }
 
 function updateRadarChart() {
-    // Toggle Selected Track in legend
-    d3.select("#radarSelLegendItem").style("display", selectedTrack ? "flex" : "none");
-
+    // Hide reset button if no tracks are selected
+    d3.select("#radarResetBtn").style("display", (selectedTrack || comparisonTrack) ? "flex" : "none");
     const data = [];
 
-    // Average
+    // 1. Average
     const avgData = audioMetrics.map(f => {
         let normVal = normalize(globalAverages[f], featureStats[f].min, featureStats[f].max);
         return { axis: f, value: normVal, originalValue: globalAverages[f] };
     });
     data.push(avgData);
 
+    // 2. Primary Selection
     if (selectedTrack) {
         data.push(getNormalizedRadarData(selectedTrack));
+    }
+
+    // 3. Comparison Selection
+    if (comparisonTrack) {
+        data.push(getNormalizedRadarData(comparisonTrack));
     }
 
     drawRadarChart(data);
@@ -1562,84 +1647,128 @@ function drawRadarChart(data) {
         .radius(d => rScale(d.value))
         .angle((d, i) => i * angleSlice);
 
-    const blobWrapper = g.selectAll(".radar-blob")
-        .data(data)
-        .enter().append("g")
-        .attr("class", "radar-blob");
-
-    const getStroke = (i) => i === 0 ? "var(--avg-stroke)" : "var(--sel-stroke)";
-    const getFill = (i) => i === 0 ? "var(--avg-color)" : "var(--sel-color)";
-
     // 5. Drawing Areas
-    blobWrapper.append("path")
-        .attr("class", "radarArea")
-        .style("fill", (d, i) => getFill(i))
-        .style("fill-opacity", radarConfig.opacityArea)
-        .style("stroke", (d, i) => getStroke(i))
-        .style("stroke-width", i => i === 0 ? "1px" : "3px")
-        .style("filter", i => i === 1 ? "url(#radarSelectionGlow)" : "none")
-        .style("cursor", "pointer")
-        .on('mouseover', function (event, d) {
-            d3.selectAll(".radarArea").transition().duration(200).style("fill-opacity", 0.05);
-            d3.select(this).transition().duration(200).style("fill-opacity", 0.8);
+    const areaGroup = g.append("g").attr("class", "areaGroup");
 
-            const isAvg = d3.select(this.parentNode).datum() === data[0];
-            let htmlContent = `<div class="tooltip-title" style="margin-bottom: 5px;">${isAvg ? "Average Profile" : (selectedTrack ? selectedTrack.Title : "Profile")}</div>`;
+    data.forEach((seriesData, i) => {
+        const isAvg = i === 0;
+        const isComp = i === 2;
+        const valColor = isAvg ? "var(--avg-stroke)" : (isComp ? "var(--comp-stroke)" : "var(--sel-stroke)");
+        const title = isAvg ? "Average Profile" : (isComp ? comparisonTrack.Title : selectedTrack.Title);
 
-            d.forEach(feature => {
-                const valColor = isAvg ? "#38bdf8" : "#f472b6";
-                htmlContent += `<div style="font-size: 11px; text-transform: capitalize; margin-bottom: 2px;">
-                    <span style="opacity: 0.9;">${feature.axis}:</span> 
-                    <strong style="color: ${valColor}; font-size: 12px; margin-left: 4px;">${d3.format(".2f")(feature.value)}</strong>
-                </div>`;
+        // Radar Area Path
+        areaGroup.append("path")
+            .datum(seriesData)
+            .attr("class", "radarArea")
+            .attr("d", radarLine)
+            .style("fill", isAvg ? "var(--avg-color)" : (isComp ? "var(--comp-color)" : "var(--sel-color)"))
+            .style("fill-opacity", radarConfig.opacityArea)
+            .style("stroke", valColor)
+            .style("stroke-width", isAvg ? "3.5px" : (isComp ? "4.5px" : "4.2px"))
+            .style("filter", isAvg ? "none" : (isComp ? "url(#radarComparisonGlow)" : "url(#radarSelectionGlow)"))
+            .style("cursor", "pointer")
+            .on('mouseover', function (event, d) {
+                // Dim other areas
+                d3.selectAll(".radarArea").transition().duration(200).style("fill-opacity", 0.05);
+                // Highlight this one
+                d3.select(this).transition().duration(200).style("fill-opacity", 0.8);
+
+                let htmlContent = `<div class="tooltip-title" style="margin-bottom: 5px; color: ${valColor};">${title}</div>`;
+                d.forEach(feature => {
+                    htmlContent += `<div style="font-size: 11px; text-transform: capitalize; margin-bottom: 2px;">
+                        <span style="opacity: 0.9;">${feature.axis}:</span> 
+                        <strong style="color: ${valColor}; font-size: 12px; margin-left: 4px;">${formatFeatureVal(feature.axis, feature.originalValue)}</strong>
+                    </div>`;
+                });
+
+                d3.select("#tooltip").html(htmlContent)
+                    .style("left", (event.pageX + 15) + "px")
+                    .style("top", (event.pageY - 28) + "px")
+                    .transition().duration(200).style("opacity", 1);
+            })
+            .on('mousemove', event => {
+                d3.select("#tooltip").style("left", (event.pageX + 15) + "px").style("top", (event.pageY - 28) + "px");
+            })
+            .on('mouseout', function () {
+                d3.selectAll(".radarArea").transition().duration(200).style("fill-opacity", radarConfig.opacityArea);
+                d3.select("#tooltip").transition().duration(200).style("opacity", 0);
             });
 
-            d3.select("#tooltip").html(htmlContent)
-                .style("left", (event.pageX + 15) + "px")
-                .style("top", (event.pageY - 28) + "px")
-                .transition().duration(200).style("opacity", 1);
-        })
-        .on('mousemove', function (event) {
-            d3.select("#tooltip").style("left", (event.pageX + 15) + "px").style("top", (event.pageY - 28) + "px");
-        })
-        .on('mouseout', function () {
-            d3.selectAll(".radarArea").transition().duration(200).style("fill-opacity", radarConfig.opacityArea);
-            d3.select("#tooltip").transition().duration(200).style("opacity", 0);
-        })
-        .transition().duration(800)
-        .attr("d", d => radarLine(d));
+    });
 
-    // 6. Interaction Dots
-    const tooltip = d3.select("#tooltip");
-    blobWrapper.selectAll(".radarCircle")
-        .data(d => d)
-        .enter().append("circle")
-        .attr("class", "radarCircle")
-        .attr("r", radarConfig.dotRadius)
-        .attr("cx", (d, i) => rScale(d.value) * Math.cos(angleSlice * i - Math.PI / 2))
-        .attr("cy", (d, i) => rScale(d.value) * Math.sin(angleSlice * i - Math.PI / 2))
-        .style("fill", function () {
-            const parentData = d3.select(this.parentNode).datum();
-            const colorIdx = data.indexOf(parentData);
-            return getStroke(colorIdx);
-        })
-        .style("fill-opacity", 0.9)
-        .on("mouseover", function (event, d) {
-            d3.select(this).attr("r", 7).style("fill", "#fff");
-            tooltip.transition().duration(200).style("opacity", 1);
-            tooltip.html(`
-                <div class="tooltip-title">${d.axis.charAt(0).toUpperCase() + d.axis.slice(1)}</div>
-                <div>Intensity Score: <strong>${d3.format(".2f")(d.value)}</strong></div>
-                <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5);">Actual: ${d3.format(".2f")(d.originalValue)}</div>
-            `)
-                .style("left", (event.pageX + 15) + "px")
-                .style("top", (event.pageY - 28) + "px");
-        })
-        .on("mouseout", function () {
-            const parentData = d3.select(this.parentNode).datum();
-            d3.select(this).attr("r", radarConfig.dotRadius).style("fill", getStroke(data.indexOf(parentData)));
-            tooltip.transition().duration(500).style("opacity", 0);
-        });
+    // 7. INTEGRATED HORIZONTAL LEGEND BADGE
+    const legendG = radarSvg.append("g")
+        .attr("class", "legendBadge")
+        .attr("transform", `translate(${-radarConfig.w / 2 - 70}, ${-radarConfig.h / 2 - 65})`);
+
+    const legendData = [
+        { label: "Average", color: "var(--avg-stroke)" }
+    ];
+    if (selectedTrack) legendData.push({ label: selectedTrack.Title, color: "var(--sel-stroke)" });
+    if (comparisonTrack) legendData.push({ label: comparisonTrack.Title, color: "var(--comp-stroke)" });
+
+    let currentX = 0;
+    legendData.forEach((d, i) => {
+        // 1. Calculate pill width with more aggressive truncation for single line
+        const isRemovable = i > 0;
+        const limit = isRemovable ? 12 : 15; // Shorter for songs with X
+        const titleText = d.label.length > limit ? d.label.substring(0, limit - 2) + "..." : d.label;
+        const textLen = (titleText.length * 6.5) + (isRemovable ? 35 : 25);
+        const pillW = Math.max(70, textLen);
+
+        const item = legendG.append("g").attr("transform", `translate(${currentX}, 0)`);
+        
+        // 2. Main Pill Background
+        item.append("rect")
+            .attr("width", pillW)
+            .attr("height", 18)
+            .attr("rx", 9).attr("ry", 9)
+            .style("fill", "rgba(0,0,0,0.3)")
+            .style("stroke", d.color)
+            .style("stroke-width", "1px");
+
+        // 3. Indicator Circle
+        item.append("circle")
+            .attr("cx", 9).attr("cy", 9)
+            .attr("r", 3.5)
+            .style("fill", d.color);
+
+        // 4. Label Text
+        item.append("text")
+            .attr("x", 18).attr("y", 13)
+            .style("font-size", "8.5px")
+            .style("font-weight", "600")
+            .style("text-transform", "uppercase")
+            .style("letter-spacing", "0.4px")
+            .style("fill", "rgba(255,255,255,0.85)")
+            .text(titleText);
+
+        // 6. Close Button (X)
+        if (isRemovable) {
+            const closeG = item.append("g")
+                .attr("class", "legend-close")
+                .attr("transform", `translate(${pillW - 16}, 9)`)
+                .style("cursor", "pointer")
+                .on("click", (event) => {
+                    event.stopPropagation();
+                    const trackToToggle = (i === 1) ? selectedTrack : comparisonTrack;
+                    toggleSongSelection(trackToToggle);
+                });
+
+            closeG.append("circle")
+                .attr("r", 6)
+                .style("fill", "rgba(255,255,255,0.05)")
+                .on("mouseover", function() { d3.select(this).style("fill", "rgba(255,255,255,0.15)"); })
+                .on("mouseout", function() { d3.select(this).style("fill", "rgba(255,255,255,0.05)"); });
+
+            closeG.append("path")
+                .attr("d", "M-2.5,-2.5 L2.5,2.5 M2.5,-2.5 L-2.5,2.5")
+                .style("stroke", "rgba(255,255,255,0.5)")
+                .style("stroke-width", "1.2px");
+        }
+            
+        currentX += pillW + 10;
+    });
 }
 
 /* ---------------------------------------------------------
@@ -1658,9 +1787,8 @@ function initBubbleChart() {
         .style("display", "block")
         .style("background", "transparent")
         .on("click", function () {
-            selectedTrack = null;
+            toggleSongSelection(null);
             d3.select("#songDropdown").property("value", "");
-            updateDashboard();
         });
 
     const g = svg.append("g");
@@ -1784,27 +1912,24 @@ function initBubbleChart() {
             .attr("transform", d => `translate(${d.x},${d.y})`)
             .style("cursor", "pointer")
             .on("click", (event, d) => {
-                if (selectedTrack && selectedTrack.Title === d.data.data.Title) {
-                    selectedTrack = null;
-                    d3.select("#songDropdown").property("value", "");
-                } else {
-                    selectedTrack = d.data.data;
-                    const opt = d3.select("#songDropdown").selectAll("option").filter((o, i) => o && (selectedTrack.id === o.id || selectedTrack.Title === o.Title)).node();
-                    if (opt) d3.select("#songDropdown").property("value", opt.value);
-                }
-                updateDashboard();
                 event.stopPropagation();
+                toggleSongSelection(d.data.data);
             });
 
         node.append("circle")
             .attr("r", 0)
             .attr("class", d => "bubble-node-" + safeId(d.data.data.Title))
             .style("fill", colorScale(artistData.name)) // Reuse parent artist color
-            .style("opacity", d => (selectedTrack && selectedTrack.Title === d.data.data.Title) ? 1 : 0.6)
+            .style("opacity", d => {
+                const isSel = selectedTrack && selectedTrack.Title === d.data.data.Title;
+                const isComp = comparisonTrack && comparisonTrack.Title === d.data.data.Title;
+                return (isSel || isComp) ? 1 : 0.6;
+            })
             .on("mouseover", function () { d3.select(this).transition().duration(200).style("opacity", 1).attr("r", (d3.select(this).datum().r * 0.95) * 1.05); })
             .on("mouseout", function (event, d) {
-                const isSelected = selectedTrack && selectedTrack.Title === d.data.data.Title;
-                d3.select(this).transition().duration(200).style("opacity", isSelected ? 1 : 0.6).attr("r", d.r * 0.95);
+                const isSel = selectedTrack && selectedTrack.Title === d.data.data.Title;
+                const isComp = comparisonTrack && comparisonTrack.Title === d.data.data.Title;
+                d3.select(this).transition().duration(200).style("opacity", (isSel || isComp) ? 1 : 0.6).attr("r", d.r * 0.95);
             })
             .transition().duration(500)
             .delay((d, i) => i * 15)
@@ -2704,9 +2829,8 @@ function initParallelChart() {
         .attr("height", 500)
         .on("click", (event) => {
             if (event.target.tagName === 'svg' || event.target.tagName === 'rect') {
-                selectedTrack = null;
+                toggleSongSelection(null);
                 d3.select("#songDropdown").property("value", "");
-                updateDashboard();
             }
         });
 
@@ -2816,67 +2940,67 @@ function updateParallelChart() {
             d3.select("#tooltip").transition().duration(200).style("opacity", 0);
         })
         .on("click", function (event, d) {
-            if (selectedTrack && selectedTrack.Title === d.Title) {
-                selectedTrack = null;
-            } else {
-                selectedTrack = d;
-            }
-            updateDashboard();
-            event.stopPropagation(); // Prevent background click from deselecting
+            event.stopPropagation();
+            toggleSongSelection(d);
         });
 
     mergedPaths.transition().duration(globalAnimationDuration)
         .attr("d", path)
         .style("fill", "none")
-        .style("stroke", d => (selectedTrack && selectedTrack.Title === d.Title) ? "transparent" : (selectedTrack ? "rgba(255, 255, 255, 0.02)" : "rgba(255, 255, 255, 0.05)"))
+        .style("stroke", d => {
+            const isSel = selectedTrack && selectedTrack.Title === d.Title;
+            const isComp = comparisonTrack && comparisonTrack.Title === d.Title;
+            if (isSel || isComp) return "transparent"; // These are drawn in highlightGroup
+            return (selectedTrack || comparisonTrack) ? "rgba(255, 255, 255, 0.02)" : "rgba(255, 255, 255, 0.05)";
+        })
         .style("stroke-width", "1px");
 
     paths.exit().remove();
 
-    // Highlight selected track or nothing
-    highlightGroup.selectAll("path").remove();
+    // Highlight selected tracks
+    highlightGroup.selectAll("*").remove();
 
-    if (selectedTrack) {
-        // Dim the background lines to make the highlight pop
-        linesGroup.selectAll("path").style("stroke", "rgba(255, 255, 255, 0.02)");
+    [selectedTrack, comparisonTrack].forEach((track, idx) => {
+        if (!track) return;
+        const color = idx === 0 ? "var(--sel-stroke)" : "var(--comp-stroke)";
+        const trackGroup = highlightGroup.append("g").attr("class", `highlight-track-${idx}`);
 
-        highlightGroup.append("path")
-            .datum(selectedTrack)
+        // 1. Highlight Path
+        trackGroup.append("path")
+            .datum(track)
             .attr("d", path)
             .style("fill", "none")
-            .style("stroke", "var(--accent)")
+            .style("stroke", color)
             .style("stroke-width", "4px")
-            .style("filter", "drop-shadow(0 0 8px var(--accent))");
+            .style("stroke-linecap", "round")
+            .style("filter", `drop-shadow(0 0 10px ${color})`)
+            .style("opacity", 0)
+            .transition().duration(600)
+            .style("opacity", 1);
 
-        // Draw the labels for the specific values at each axis intersection
-        highlightGroup.selectAll("circle").data(allFeatures).enter().append("circle")
+        // 2. Intersection Circles
+        trackGroup.selectAll("circle").data(audioMetrics).enter().append("circle")
             .attr("cx", f => x(f))
-            .attr("cy", f => {
-                let val = (selectedTrack[f] !== undefined && !isNaN(selectedTrack[f])) ? selectedTrack[f] : 0;
-                return y[f](val);
-            })
+            .attr("cy", f => y[f](track[f] || 0))
             .attr("r", 5)
             .style("fill", "#fff")
-            .style("stroke", "var(--accent)")
+            .style("stroke", color)
             .style("stroke-width", "2px");
 
-        highlightGroup.selectAll(".parallel-val-label").data(allFeatures).enter().append("text")
+        // 3. Value Labels (Nudged based on index to avoid collision)
+        trackGroup.selectAll(".parallel-val-label").data(audioMetrics).enter().append("text")
             .attr("class", "parallel-val-label")
-            .attr("x", f => x(f) + 8)
-            .attr("y", f => {
-                let val = (selectedTrack[f] !== undefined && !isNaN(selectedTrack[f])) ? selectedTrack[f] : 0;
-                return y[f](val) + 4;
-            })
+            .attr("x", f => x(f) + (idx === 0 ? 8 : -8))
+            .attr("y", f => y[f](track[f] || 0) + 4)
+            .style("text-anchor", idx === 0 ? "start" : "end")
             .style("fill", "#fff")
-            .style("font-size", "11px")
+            .style("font-size", "10px")
             .style("font-weight", "bold")
-            .style("pointer-events", "none")
-            .style("text-shadow", "0 1px 3px rgba(0,0,0,0.9)")
-            .text(f => {
-                let val = (selectedTrack[f] !== undefined && !isNaN(selectedTrack[f])) ? selectedTrack[f] : 0;
-                return formatFeatureVal(f, val);
-            });
-    } else {
+            .style("text-shadow", `0 0 4px ${color}`)
+            .text(f => formatFeatureVal(f, track[f] || 0));
+    });
+
+    if (!selectedTrack && !comparisonTrack) {
         linesGroup.selectAll("path").style("stroke", "rgba(255, 255, 255, 0.05)");
     }
 }
@@ -3018,17 +3142,17 @@ function initRadialChart() {
         })
         .on('mouseout', function (event, d) {
             const isSel = selectedTrack && selectedTrack.Title === d.Title;
+            const isComp = comparisonTrack && comparisonTrack.Title === d.Title;
             d3.select(this)
-                .style('stroke', isSel ? '#fff' : 'none')
-                .style('stroke-width', isSel ? 2.5 : 0)
-                .attr('r', isSel ? 7 : 4.5)
-                .style('opacity', isSel ? 1 : (selectedTrack ? 0.15 : 0.85));
+                .style('stroke', (isSel || isComp) ? '#fff' : 'none')
+                .style('stroke-width', (isSel || isComp) ? 2.5 : 0)
+                .attr('r', (isSel || isComp) ? 7 : 4.5)
+                .style('opacity', (isSel || isComp) ? 1 : ((selectedTrack || comparisonTrack) ? 0.15 : 0.85));
             d3.select('#tooltip').transition().duration(500).style('opacity', 0);
         })
         .on('click', function (event, d) {
-            selectedTrack = (selectedTrack && selectedTrack.Title === d.Title) ? null : d;
-            updateDashboard();
             event.stopPropagation();
+            toggleSongSelection(d);
         });
 
     radialSimulation = d3.forceSimulation(plotData)
@@ -3049,10 +3173,27 @@ function updateRadialChart() {
     if (!radialSvg) return;
     radialSvg.selectAll('.radial-dot')
         .transition().duration(200)
-        .style('stroke', d => (selectedTrack && selectedTrack.Title === d.Title) ? '#fff' : 'none')
-        .style('stroke-width', d => (selectedTrack && selectedTrack.Title === d.Title) ? 2.5 : 0)
-        .attr('r', d => (selectedTrack && selectedTrack.Title === d.Title) ? 7 : 4.5)
-        .style('opacity', d => selectedTrack ? (d.Title === selectedTrack.Title ? 1 : 0.15) : 0.85);
+        .style('stroke', d => {
+            const isSel = selectedTrack && selectedTrack.Title === d.Title;
+            const isComp = comparisonTrack && comparisonTrack.Title === d.Title;
+            return (isSel || isComp) ? '#fff' : 'none';
+        })
+        .style('stroke-width', d => {
+            const isSel = selectedTrack && selectedTrack.Title === d.Title;
+            const isComp = comparisonTrack && comparisonTrack.Title === d.Title;
+            return (isSel || isComp) ? 2.5 : 0;
+        })
+        .attr('r', d => {
+            const isSel = selectedTrack && selectedTrack.Title === d.Title;
+            const isComp = comparisonTrack && comparisonTrack.Title === d.Title;
+            return (isSel || isComp) ? 7 : 4.5;
+        })
+        .style('opacity', d => {
+            if (!selectedTrack && !comparisonTrack) return 0.85;
+            const isSel = selectedTrack && selectedTrack.Title === d.Title;
+            const isComp = comparisonTrack && comparisonTrack.Title === d.Title;
+            return (isSel || isComp) ? 1 : 0.15;
+        });
 }
 
 /* ---------------------------------------------------------
@@ -3165,6 +3306,16 @@ let keyChartSvg = null;
 let keyChartActiveKey = null; // null = level 1 (keys), otherwise = index 0-11
 let keyChartActiveMode = null; // null = not selected, 1 = Major, 0 = Minor
 let keyChartSimulation = null;
+/* ---------------------------------------------------------
+   LEGACY KEY CHART (Commented for Reference)
+--------------------------------------------------------- 
+function initKeyChart() {
+    // ...
+}
+function updateKeyChart() {
+    // ...
+}
+*/
 
 function initKeyChart() {
     const containerNode = document.getElementById("keyChartContainer");
@@ -3173,7 +3324,7 @@ function initKeyChart() {
     const width = containerNode.clientWidth;
     const height = containerNode.clientHeight || 250;
 
-    // 1) Persistent SVG & Group handling for smooth morphing
+    // 1) Persistent SVG handling
     let svg = d3.select(containerNode).select('svg');
     if (svg.empty()) {
         keyChartSvg = d3.select(containerNode).append('svg')
@@ -3185,196 +3336,212 @@ function initKeyChart() {
         keyChartSvg = svg;
     }
 
+    // Clean up any persistent headers
+    keyChartSvg.selectAll(".key-chart-header").remove();
+
     const g = keyChartSvg.select('.key-chart-main-g');
     if (keyChartSimulation) keyChartSimulation.stop();
 
-    const keysMap = ['C', 'C#/Db', 'D', 'D#/Eb', 'E', 'F', 'F#/Gb', 'G', 'G#/Ab', 'A', 'A#/Bb', 'B'];
-    const plotData = dataset.filter(d => !isNaN(d.key) && !isNaN(d.Sentiment_Score) && !isNaN(d.mode));
+    const keysMap = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    // Circle of Fifths Sequence: C, G, D, A, E, B, Gb/F#, Db/C#, Ab, Eb, Bb, F
+    const circleOfFifths = [0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5];
+    
+    const plotData = dataset.filter(d => !isNaN(d.key) && !isNaN(d.mode));
 
     const backBtn = d3.select("#keyChartBackBtn");
     backBtn.on("click", () => {
-        if (keyChartActiveMode !== null) {
-            keyChartActiveMode = null;
-        } else {
-            keyChartActiveKey = null;
-            backBtn.style("display", "none");
-        }
+        keyChartActiveKey = null;
+        keyChartActiveMode = null;
+        backBtn.style("display", "none");
         initKeyChart();
     });
 
-    if (keyChartActiveKey === null || isNaN(keyChartActiveKey)) {
-        // LEVEL 1: RADIAL ROSE CHART (Key selection)
+    if (keyChartActiveKey === null) {
+        // LEVEL 1: CIRCLE OF FIFTHS
         backBtn.style("display", "none");
-        d3.select("#keySentimentLegend").style("display", "none"); // Hide sentiment legend in Key view
-        keyChartSvg.selectAll(".key-chart-header").remove();
+        d3.select("#keySentimentLegend").style("display", "none");
+        g.selectAll("*").remove();
 
-        const rollup = d3.rollup(plotData, v => v.length, d => d.key);
-        const keysData = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(k => ({
-            key: k,
-            count: rollup.get(k) || 0,
-            label: keysMap[k]
-        }));
+        // Prepare data for 2 rings
+        const rollup = d3.rollup(plotData, v => v.length, d => d.key, d => d.mode);
+        
+        let circleData = [];
+        circleOfFifths.forEach((k, i) => {
+            // Major (Outer)
+            circleData.push({
+                key: k,
+                mode: 1,
+                count: (rollup.get(k) && rollup.get(k).get(1)) || 0,
+                label: keysMap[k],
+                order: i,
+                isMajor: true
+            });
+            // Minor (Inner)
+            circleData.push({
+                key: k,
+                mode: 0,
+                count: (rollup.get(k) && rollup.get(k).get(0)) || 0,
+                label: keysMap[k] + "m",
+                order: i,
+                isMajor: false
+            });
+        });
 
-        const maxCount = d3.max(keysData, d => d.count) || 1;
-        const outerRadius = Math.min(width, height) / 2 - 45;
-        const innerRadius = 30;
+        const maxCount = d3.max(circleData, d => d.count) || 1;
+        const outerRadius = Math.min(width, height) / 2 - 25;
+        const midRadius = outerRadius * 0.7;
+        const innerRadius = outerRadius * 0.4;
 
-        const rScale = d3.scaleLinear().domain([0, maxCount]).range([innerRadius, outerRadius]);
-        const colorScale = d3.scaleLinear().domain([0, maxCount]).range(['rgba(6, 182, 212, 0.25)', 'rgba(6, 182, 212, 0.85)']);
+        const opacityScale = d3.scalePow().exponent(1.3).domain([0, maxCount]).range([0.08, 0.95]);
 
-        const arc = d3.arc()
-            .innerRadius(innerRadius)
-            .outerRadius(d => rScale(d.count))
-            .startAngle((d, i) => (i * 30 * Math.PI) / 180)
-            .endAngle((d, i) => ((i + 1) * 30 * Math.PI) / 180)
-            .padAngle(0.02)
+        const arcMajor = d3.arc()
+            .innerRadius(midRadius + 2)
+            .outerRadius(outerRadius)
+            .startAngle(d => (d.order * 30 * Math.PI) / 180 - (15 * Math.PI / 180))
+            .endAngle(d => ((d.order + 1) * 30 * Math.PI) / 180 - (15 * Math.PI / 180))
+            .padAngle(0.03)
             .cornerRadius(4);
 
-        const levels = [0.5, 1];
-        g.selectAll('.radial-guide').data(levels).join('circle')
-            .attr('class', 'radial-guide')
-            .attr('r', d => innerRadius + (outerRadius - innerRadius) * d)
-            .style('fill', 'none').style('stroke', 'rgba(255,255,255,0.08)').style('stroke-dasharray', '4,4');
+        const arcMinor = d3.arc()
+            .innerRadius(innerRadius)
+            .outerRadius(midRadius - 2)
+            .startAngle(d => (d.order * 30 * Math.PI) / 180 - (15 * Math.PI / 180))
+            .endAngle(d => ((d.order + 1) * 30 * Math.PI) / 180 - (15 * Math.PI / 180))
+            .padAngle(0.03)
+            .cornerRadius(4);
 
-        const segments = g.selectAll('.key-segment').data(keysData, d => d.key);
+        // Hover versions of arcs
+        const arcMajorHover = d3.arc()
+            .innerRadius(midRadius + 2)
+            .outerRadius(outerRadius + 8)
+            .startAngle(d => (d.order * 30 * Math.PI) / 180 - (15 * Math.PI / 180))
+            .endAngle(d => ((d.order + 1) * 30 * Math.PI) / 180 - (15 * Math.PI / 180))
+            .padAngle(0.01)
+            .cornerRadius(6);
 
-        segments.join(
-            enter => enter.append('path')
-                .attr('class', 'key-segment')
-                .style('cursor', 'pointer')
-                .style('opacity', 0)
-        )
-            .on('click', (event, d) => { keyChartActiveKey = d.key; initKeyChart(); })
-            .on('mouseover', function (event, d) {
-                const tTip = d3.select('#tooltip');
-                tTip.transition().duration(100).style('opacity', 1);
-                tTip.html(`<div class="tooltip-title">Key: ${d.label}</div><div style="font-size:1.1rem; color:var(--accent); font-weight:bold;">${d.count} Songs</div>`)
-                    .style('left', (event.pageX + 15) + 'px').style('top', (event.pageY - 28) + 'px');
-                d3.select(this).style('fill', '#fff').style('stroke', '#fff');
+        const arcMinorHover = d3.arc()
+            .innerRadius(innerRadius - 4)
+            .outerRadius(midRadius + 4)
+            .startAngle(d => (d.order * 30 * Math.PI) / 180 - (15 * Math.PI / 180))
+            .endAngle(d => ((d.order + 1) * 30 * Math.PI) / 180 - (15 * Math.PI / 180))
+            .padAngle(0.01)
+            .cornerRadius(6);
+
+        // Background Circle for Center
+        g.append("circle")
+            .attr("r", innerRadius - 5)
+            .style("fill", "rgba(255,255,255,0.03)")
+            .style("stroke", "rgba(255,255,255,0.05)");
+            
+        g.append("text")
+            .attr("text-anchor", "middle")
+            .attr("dy", "0.35em")
+            .style("fill", "rgba(255,255,255,0.2)")
+            .style("font-size", "10px")
+            .style("font-weight", "bold")
+            .text("KEY");
+
+        const segments = g.selectAll('.key-segment').data(circleData);
+
+        segments.enter().append('path')
+            .attr('class', 'key-segment')
+            .attr('d', d => d.isMajor ? arcMajor(d) : arcMinor(d))
+            .style('fill', d => d.isMajor ? '#2dd4bf' : '#fb7185')
+            .style('stroke', d => {
+                const isSel = selectedTrack && selectedTrack.key === d.key && selectedTrack.mode === d.mode;
+                const isComp = comparisonTrack && comparisonTrack.key === d.key && comparisonTrack.mode === d.mode;
+                if (isSel) return 'var(--sel-stroke)';
+                if (isComp) return 'var(--comp-stroke)';
+                return 'rgba(255,255,255,0.1)';
             })
-            .on('mouseout', function (event, d) {
-                const isSel = selectedTrack && +selectedTrack.key === +d.key;
-                const baseFill = isSel ? (selectedTrack.mode === 1 ? '#22d3ee' : '#f472b6') : colorScale(d.count);
-                const baseStroke = isSel ? '#fff' : 'rgba(255,255,255,0.1)';
-                d3.select(this).style('fill', baseFill).style('stroke', baseStroke);
-                d3.select('#tooltip').transition().duration(300).style('opacity', 0);
+            .style('stroke-width', d => {
+                const isSel = selectedTrack && selectedTrack.key === d.key && selectedTrack.mode === d.mode;
+                const isComp = comparisonTrack && comparisonTrack.key === d.key && comparisonTrack.mode === d.mode;
+                return (isSel || isComp) ? '3px' : '1px';
             })
-            // Apply immediate styles first to ensure responsiveness on first click
-            .attr('d', arc)
-            .style('fill', d => {
-                if (selectedTrack && +selectedTrack.key === +d.key) {
-                    return (selectedTrack.mode === 1) ? '#22d3ee' : '#f472b6';
-                }
-                return colorScale(d.count);
+            .style('opacity', d => {
+                const isSel = selectedTrack && selectedTrack.key === d.key && selectedTrack.mode === d.mode;
+                const isComp = comparisonTrack && comparisonTrack.key === d.key && comparisonTrack.mode === d.mode;
+                if (isSel || isComp) return 1.0;
+                return opacityScale(d.count);
             })
-            .style('stroke', d => (selectedTrack && +selectedTrack.key === +d.key) ? '#fff' : 'rgba(255,255,255,0.1)')
-            .style('stroke-width', d => (selectedTrack && +selectedTrack.key === +d.key) ? '2px' : '1px')
             .style('filter', d => {
-                if (selectedTrack && +selectedTrack.key === +d.key) {
-                    const col = (selectedTrack.mode === 1) ? '#22d3ee' : '#f472b6';
-                    return `drop-shadow(0 0 10px ${col})`;
-                }
+                const isSel = selectedTrack && selectedTrack.key === d.key && selectedTrack.mode === d.mode;
+                const isComp = comparisonTrack && comparisonTrack.key === d.key && comparisonTrack.mode === d.mode;
+                if (isSel) return 'drop-shadow(0 0 15px var(--sel-stroke))';
+                if (isComp) return 'drop-shadow(0 0 15px var(--comp-stroke))';
                 return 'none';
             })
-            // Then transition the opacity
-            .transition().duration(600)
-            .style('opacity', d => {
-                if (selectedTrack) return (+selectedTrack.key === +d.key) ? 1 : 0.35;
-                return 0.85;
+            .style('cursor', 'pointer')
+            .on('click', (event, d) => {
+                keyChartActiveKey = d.key;
+                keyChartActiveMode = d.mode;
+                initKeyChart();
+            })
+            .on('mouseover', function (event, d) {
+                d3.select(this)
+                    .transition().duration(200)
+                    .attr('d', d.isMajor ? arcMajorHover(d) : arcMinorHover(d))
+                    .style('opacity', 1);
+
+                const tTip = d3.select('#tooltip');
+                tTip.transition().duration(100).style('opacity', 1);
+                tTip.html(`
+                    <div class="tooltip-title">${keysMap[d.key]} ${d.isMajor ? 'Major' : 'Minor'}</div>
+                    <div style="font-size:1.1rem; color:${d.isMajor ? '#2dd4bf' : '#fb7185'}; font-weight:bold;">${d.count} Songs</div>
+                `).style('left', (event.pageX + 15) + 'px').style('top', (event.pageY - 28) + 'px');
+
+                // Animate Label Size
+                g.select(`#label-${d.key}-${d.mode}`)
+                    .transition().duration(200)
+                    .style('font-size', d.isMajor ? '14px' : '12px');
+            })
+            .on('mouseout', function (event, d) {
+                d3.select(this)
+                    .transition().duration(300)
+                    .attr('d', d.isMajor ? arcMajor(d) : arcMinor(d))
+                    .style('opacity', opacityScale(d.count))
+                    .style('stroke', 'rgba(255,255,255,0.1)');
+                
+                d3.select('#tooltip').transition().duration(300).style('opacity', 0);
+
+                // Reset Label Size
+                g.select(`#label-${d.key}-${d.mode}`)
+                    .transition().duration(200)
+                    .style('font-size', d.isMajor ? '10px' : '9px');
             });
 
-        g.selectAll('.key-count-label').data(keysData, d => d.key).join('text')
-            .attr('class', 'key-count-label')
-            .attr('text-anchor', 'middle').attr('dy', '0.35em')
-            .style('fill', '#fff').style('font-size', '9px').style('font-weight', 'bold')
-            .style('pointer-events', 'none')
-            .text(d => d.count > 0 ? d.count : '')
-            .attr('transform', d => {
-                const centroid = d3.arc().innerRadius(innerRadius).outerRadius(rScale(d.count)).startAngle(((d.key * 30) * Math.PI) / 180).endAngle((((d.key + 1) * 30) * Math.PI) / 180).centroid();
-                return `translate(${centroid[0]}, ${centroid[1]})`;
-            })
-            .style('opacity', d => d.count > 0 ? 0.85 : 0);
-
-        g.selectAll('.key-label').data(keysData, d => d.key).join('text')
+        // Labels
+        g.selectAll('.key-label').data(circleData).enter().append('text')
             .attr('class', 'key-label')
-            .attr('text-anchor', 'middle').attr('dy', '0.35em')
-            .attr('x', (d, i) => (outerRadius + 22) * Math.sin(((i * 30 + 15) * Math.PI) / 180))
-            .attr('y', (d, i) => -(outerRadius + 22) * Math.cos(((i * 30 + 15) * Math.PI) / 180))
-            .style('fill', 'rgba(255,255,255,0.7)').style('font-size', '11px').style('font-weight', 'bold').style('pointer-events', 'none')
+            .attr('id', d => `label-${d.key}-${d.mode}`)
+            .attr('text-anchor', 'middle')
+            .attr('dy', '0.35em')
+            .attr('transform', d => {
+                const angle = (d.order * 30 + 0) * Math.PI / 180;
+                const r = d.isMajor ? (midRadius + outerRadius) / 2 : (innerRadius + midRadius) / 2;
+                return `translate(${r * Math.sin(angle)}, ${-r * Math.cos(angle)})`;
+            })
+            .style('fill', '#fff')
+            .style('font-size', d => d.isMajor ? '10px' : '9px')
+            .style('font-weight', 'bold')
+            .style('pointer-events', 'none')
             .text(d => d.label);
 
-    } else if (keyChartActiveMode === null) {
-        // LEVEL 2: MODE SELECTION (MAJOR vs MINOR)
-        backBtn.style("display", "block");
-        d3.select("#keySentimentLegend").style("display", "none"); // Hide sentiment legend in Mode view
-        g.selectAll('.key-segment, .key-count-label, .key-label, .radial-guide, .key-song-bubble').remove();
-        keyChartSvg.selectAll(".key-chart-header").remove();
-
-        const songsInKey = plotData.filter(d => d.key === keyChartActiveKey);
-        const majorSongs = songsInKey.filter(d => d.mode === 1);
-        const minorSongs = songsInKey.filter(d => d.mode === 0);
-
-        const modes = [
-            { label: 'Major', mode: 1, count: majorSongs.length, color: '#2dd4bf', x: -width / 4 },
-            { label: 'Minor', mode: 0, count: minorSongs.length, color: '#fb7185', x: width / 4 }
-        ];
-
-        const node = g.selectAll('.mode-bubble').data(modes, d => d.label);
-        node.join(
-            enter => {
-                const group = enter.append('g').attr('class', 'mode-bubble')
-                    .attr('transform', d => `translate(${d.x}, 0)`)
-                    .style('cursor', 'pointer')
-                    .on('click', (event, d) => { keyChartActiveMode = d.mode; initKeyChart(); });
-
-                group.append('circle')
-                    .attr('r', 0)
-                    .style('fill', d => d.color)
-                    .style('fill-opacity', d => (selectedTrack && selectedTrack.key === keyChartActiveKey && selectedTrack.mode === d.mode) ? 0.8 : 0.2)
-                    .style('stroke', d => (selectedTrack && selectedTrack.key === keyChartActiveKey && selectedTrack.mode === d.mode) ? '#fff' : d.color)
-                    .style('stroke-width', d => (selectedTrack && selectedTrack.key === keyChartActiveKey && selectedTrack.mode === d.mode) ? 3 : 2)
-                    .style('filter', d => (selectedTrack && selectedTrack.key === keyChartActiveKey && selectedTrack.mode === d.mode) ? `drop-shadow(0 0 15px ${d.color})` : 'none')
-                    .transition().duration(600).ease(d3.easeBackOut)
-                    .attr('r', d => Math.max(45, Math.min(width / 4, 45 + (d.count / (songsInKey.length || 1)) * 60)));
-
-                group.append('text')
-                    .attr('dy', '-0.5em')
-                    .attr('text-anchor', 'middle')
-                    .style('fill', '#fff').style('font-weight', 'bold').style('font-size', '14px')
-                    .text(d => d.label);
-
-                group.append('text')
-                    .attr('dy', '1em')
-                    .attr('text-anchor', 'middle')
-                    .style('fill', 'rgba(255,255,255,0.6)').style('font-size', '11px')
-                    .text(d => d.count + ' tracks');
-
-                return group;
-            }
-        );
-
-        keyChartSvg.append("text")
-            .attr("class", "key-chart-header")
-            .attr("x", width / 2).attr("y", 25)
-            .attr("text-anchor", "middle")
-            .style("fill", "rgba(255, 255, 255, 0.4)").style("font-size", "12px").style("font-weight", "bold")
-            .text(`Select Mode in ${keysMap[keyChartActiveKey]}`);
-
     } else {
-        // LEVEL 3: SONG LEVEL (Filtered by Key and Mode)
+        // LEVEL 2: SONG BUBBLES (Drill-down)
         backBtn.style("display", "block");
-        d3.select("#keySentimentLegend").style("display", "flex"); // Show sentiment legend in Song view
-        g.selectAll('.key-segment, .key-count-label, .key-label, .radial-guide, .mode-bubble').remove();
-        keyChartSvg.selectAll(".key-chart-header").remove();
+        d3.select("#keySentimentLegend").style("display", "flex");
+        g.selectAll("*").remove();
 
         const songsFiltered = plotData.filter(d => d.key === keyChartActiveKey && d.mode === keyChartActiveMode);
         const songCount = songsFiltered.length;
 
-        const opacityScale = d3.scaleLinear().domain([-1, 1]).range([0.55, 0.9]);
-        const baseRadius = songCount > 200 ? 3 : (songCount > 100 ? 4.5 : 6);
+        const baseRadius = songCount > 150 ? 3.5 : (songCount > 80 ? 5 : 7);
+        const color = keyChartActiveMode === 1 ? '#2dd4bf' : '#fb7185';
 
         songsFiltered.forEach(d => {
-            d.r = baseRadius + Math.random() * (baseRadius / 3);
+            d.r = baseRadius + Math.random() * (baseRadius / 2);
             d.x = (Math.random() - 0.5) * 50;
             d.y = (Math.random() - 0.5) * 50;
         });
@@ -3383,76 +3550,46 @@ function initKeyChart() {
         const dotsEnter = dots.enter().append('circle')
             .attr('class', 'key-song-bubble')
             .attr('r', d => d.r)
-            .style('fill', d => d.mode === 1 ? '#2dd4bf' : '#fb7185')
-            .style('opacity', d => opacityScale(d.Sentiment_Score))
-            .style('stroke', '#fff').style('stroke-opacity', d => opacityScale(d.Sentiment_Score)).style('stroke-width', 0.5)
+            .style('fill', color)
+            .style('opacity', d => 0.4 + (d.Sentiment_Score + 1) / 4)
+            .style('stroke', '#fff')
+            .style('stroke-opacity', 0)
+            .style('stroke-width', 2)
             .style('cursor', 'pointer')
             .on('mouseover', function (event, d) {
-                d3.select(this).raise().style('stroke-opacity', 1.0).style('stroke-width', 2.5).attr('r', d.r + 3);
+                d3.select(this).raise().style('stroke-opacity', 1).attr('r', d.r + 3);
                 const tTip = d3.select('#tooltip');
                 tTip.transition().duration(200).style('opacity', 1);
                 tTip.html(`
                     <div class="tooltip-title">${d.Title}</div>
                     <div>Artist: ${d.Artist}</div>
                     <div style="margin-top:5px;border-top:1px solid rgba(255,255,255,0.1);padding-top:5px;">
-                        <div>Key: <strong style="color:var(--accent)">${keysMap[d.key]}</strong></div>
-                        <div>Mode: <strong style="color:${d.mode === 1 ? '#2dd4bf' : '#fb7185'}">${d.mode === 1 ? 'Major' : 'Minor'}</strong></div>
+                        <div>Year: <strong>${d.Year}</strong></div>
                         <div>Sentiment: <strong>${d3.format('.2f')(d.Sentiment_Score)}</strong></div>
                     </div>
                 `).style('left', (event.pageX + 15) + 'px').style('top', (event.pageY - 28) + 'px');
             })
             .on('mouseout', function (event, d) {
                 const isSel = selectedTrack && selectedTrack.Title === d.Title;
-                d3.select(this).style('stroke-width', isSel ? 3 : 0.5).style('stroke-opacity', isSel ? 1 : opacityScale(d.Sentiment_Score)).attr('r', isSel ? d.r + 3 : d.r);
+                d3.select(this).style('stroke-opacity', isSel ? 1 : 0).attr('r', isSel ? d.r + 3 : d.r);
                 d3.select('#tooltip').transition().duration(500).style('opacity', 0);
             })
             .on('click', function (event, d) {
-                selectedTrack = (selectedTrack && selectedTrack.Title === d.Title) ? null : d;
-                updateDashboard();
+                toggleSongSelection(d);
                 event.stopPropagation();
             });
 
         keyChartSimulation = d3.forceSimulation(songsFiltered)
-            .force('x', d3.forceX(0).strength(0.08))
-            .force('y', d3.forceY(0).strength(0.08))
-            .force('collide', d3.forceCollide(d => d.r + 1).iterations(3))
+            .force('x', d3.forceX(0).strength(0.1))
+            .force('y', d3.forceY(0).strength(0.1))
+            .force('collide', d3.forceCollide(d => d.r + 1.5).iterations(2))
             .on('tick', () => {
-                dotsEnter.attr('cx', d => {
-                    d.x = Math.max(-width / 2 + d.r + 10, Math.min(width / 2 - d.r - 10, d.x));
-                    return d.x;
-                }).attr('cy', d => {
-                    const topLimit = (d.x < -width / 4) ? -height / 2 + 50 : -height / 2 + d.r + 10;
-                    d.y = Math.max(topLimit, Math.min(height / 2 - d.r - 10, d.y));
-                    return d.y;
-                });
+                dotsEnter.attr('cx', d => d.x).attr('cy', d => d.y);
             });
 
-        keyChartSvg.append("text")
-            .attr("class", "key-chart-header")
-            .attr("x", width / 2).attr("y", 25)
-            .attr("text-anchor", "middle")
-            .style("fill", "rgba(255, 255, 255, 0.4)").style("font-size", "12px").style("font-weight", "bold")
-            .text(`${keyChartActiveMode === 1 ? 'Major' : 'Minor'} tracks in ${keysMap[keyChartActiveKey]}`);
-
-        updateKeyChart();
     }
 }
-
-function updateKeyChart() {
-    if (!keyChartSvg) return;
-    
-    if (keyChartActiveKey === null || keyChartActiveMode === null) {
-        // If we are at Level 1 or 2, we need to refresh the base visuals to reflect selectedTrack highlights
-        initKeyChart();
-        return;
-    }
-
-    const opacityScale = d3.scaleLinear().domain([-1, 1]).range([0.55, 0.9]);
-    keyChartSvg.selectAll('.key-song-bubble')
-        .style('stroke-width', d => (selectedTrack && selectedTrack.Title === d.Title) ? 3 : 0.5)
-        .style('stroke-opacity', d => (selectedTrack && selectedTrack.Title === d.Title) ? 1 : opacityScale(d.Sentiment_Score))
-        .attr('r', d => (selectedTrack && selectedTrack.Title === d.Title) ? d.r + 3 : d.r);
-}
+function updateKeyChart() { if (keyChartSvg) initKeyChart(); }
 
 /* ---------------------------------------------------------
    WORD CATEGORY BAR CHART
@@ -4120,8 +4257,6 @@ function updateTopicEvolutionChart() {
             selectedTopic = d.key;
             selectedYear = year;
             selectedWordCategory = null; // MUTUAL EXCLUSION
-            selectedTrack = null; // Clear active song on theme change
-            d3.select("#songDropdown").property("value", "");
 
             updateDashboard(); // Immediately clear embed and radar specifics
 
