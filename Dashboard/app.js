@@ -516,7 +516,7 @@ function initOneBubbleChart(cfg) {
     d3.select('#' + cfg.sizeSelectId).on('change', function () { cfg.sizeFeature = this.value; updateOneBubbleChart(cfg); });
 
     // Build SVG — force square using the container's rendered clientWidth
-    const margin = { top: 45, right: 30, bottom: 85, left: 60 };
+    const margin = { top: 50, right: 30, bottom: 100, left: 80 };
     const size = containerNode.clientWidth - margin.left - margin.right;
     containerNode.style.height = (size + margin.top + margin.bottom) + 'px';
 
