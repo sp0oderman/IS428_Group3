@@ -3402,35 +3402,44 @@ function initKeyChart() {
         const midRadius = outerRadius * 0.7;
         const innerRadius = outerRadius * 0.4;
 
+        // SCALE: Volume to Radial Thickness
+        const volumeScaleMajor = d3.scaleSqrt()
+            .domain([0, maxCount])
+            .range([8, outerRadius - midRadius - 5]);
+            
+        const volumeScaleMinor = d3.scaleSqrt()
+            .domain([0, maxCount])
+            .range([8, midRadius - innerRadius - 5]);
+
         const opacityScale = d3.scalePow().exponent(1.3).domain([0, maxCount]).range([0.08, 0.95]);
 
         const arcMajor = d3.arc()
             .innerRadius(midRadius + 2)
-            .outerRadius(outerRadius)
+            .outerRadius(d => midRadius + 2 + volumeScaleMajor(d.count))
             .startAngle(d => (d.order * 30 * Math.PI) / 180 - (15 * Math.PI / 180))
             .endAngle(d => ((d.order + 1) * 30 * Math.PI) / 180 - (15 * Math.PI / 180))
             .padAngle(0.03)
             .cornerRadius(4);
 
         const arcMinor = d3.arc()
-            .innerRadius(innerRadius)
+            .innerRadius(d => midRadius - 2 - volumeScaleMinor(d.count))
             .outerRadius(midRadius - 2)
             .startAngle(d => (d.order * 30 * Math.PI) / 180 - (15 * Math.PI / 180))
             .endAngle(d => ((d.order + 1) * 30 * Math.PI) / 180 - (15 * Math.PI / 180))
             .padAngle(0.03)
             .cornerRadius(4);
 
-        // Hover versions of arcs
+        // Hover versions of arcs (Maintain variable sizing)
         const arcMajorHover = d3.arc()
-            .innerRadius(midRadius + 2)
-            .outerRadius(outerRadius + 8)
+            .innerRadius(midRadius - 2)
+            .outerRadius(d => midRadius + 2 + volumeScaleMajor(d.count) + 8)
             .startAngle(d => (d.order * 30 * Math.PI) / 180 - (15 * Math.PI / 180))
             .endAngle(d => ((d.order + 1) * 30 * Math.PI) / 180 - (15 * Math.PI / 180))
             .padAngle(0.01)
             .cornerRadius(6);
 
         const arcMinorHover = d3.arc()
-            .innerRadius(innerRadius - 4)
+            .innerRadius(d => midRadius - 2 - volumeScaleMinor(d.count) - 6)
             .outerRadius(midRadius + 4)
             .startAngle(d => (d.order * 30 * Math.PI) / 180 - (15 * Math.PI / 180))
             .endAngle(d => ((d.order + 1) * 30 * Math.PI) / 180 - (15 * Math.PI / 180))
@@ -3539,9 +3548,8 @@ function initKeyChart() {
             .attr('text-anchor', 'middle')
             .attr('dy', '0.35em')
             .attr('transform', d => {
-                const angle = (d.order * 30 + 0) * Math.PI / 180;
-                const r = d.isMajor ? (midRadius + outerRadius) / 2 : (innerRadius + midRadius) / 2;
-                return `translate(${r * Math.sin(angle)}, ${-r * Math.cos(angle)})`;
+                const center = d.isMajor ? arcMajor.centroid(d) : arcMinor.centroid(d);
+                return `translate(${center[0]}, ${center[1]})`;
             })
             .style('fill', '#fff')
             .style('font-size', d => d.isMajor ? '10px' : '9px')
@@ -3557,6 +3565,22 @@ function initKeyChart() {
         backBtn.style("display", "block");
         d3.select("#keySentimentLegend").style("display", "flex");
         g.selectAll("*").remove();
+
+        // 1. AESTHETIC WATERMARK (Background Label)
+        g.append("text")
+            .attr("x", 0)
+            .attr("y", -height / 4 + 10) // Center of the upper-half
+            .attr("text-anchor", "middle")
+            .style("fill", "#fff")
+            .style("font-size", "2.85rem")
+            .style("font-weight", "900")
+            .style("opacity", "0.08")
+            .style("letter-spacing", "5px")
+            .style("pointer-events", "none")
+            .text(`${keysMap[keyChartActiveKey]} ${keyChartActiveMode === 1 ? 'MAJOR' : 'MINOR'}`);
+
+        // Immediate Tooltip Shutdown
+        d3.select("#tooltip").style("opacity", 0);
 
         const songsFiltered = plotData.filter(d => d.key === keyChartActiveKey && d.mode === keyChartActiveMode);
         const songCount = songsFiltered.length;
