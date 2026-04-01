@@ -939,7 +939,7 @@ function initDistributionCurves() {
         const item = grid.append("div").attr("class", "scatter-plot-item dist-curve-item");
         item.append("h3").text(featureLabel(feature));
         const divId = "dist-" + feature;
-        item.append("div").attr("id", divId).style("height", "230px").style("width", "100%");
+        item.append("div").attr("id", divId).style("height", "170px").style("width", "100%");
 
         const svgContainer = d3.select("#" + divId);
         const margin = { top: 25, right: 15, bottom: 30, left: 35 };
