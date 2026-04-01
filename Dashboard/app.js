@@ -1539,8 +1539,8 @@ function buildRadarLayout() {
                     <path d="M18 6L6 18M6 6l12 12"/>
                 </svg>
             `)
-            .on("mouseenter", function() { d3.select(this).style("background", "rgba(255,255,255,0.1)").select("svg").style("opacity", "1"); })
-            .on("mouseleave", function() { d3.select(this).style("background", "rgba(255,255,255,0.05)").select("svg").style("opacity", "0.6"); });
+            .on("mouseenter", function () { d3.select(this).style("background", "rgba(255,255,255,0.1)").select("svg").style("opacity", "1"); })
+            .on("mouseleave", function () { d3.select(this).style("background", "rgba(255,255,255,0.05)").select("svg").style("opacity", "0.6"); });
     }
 
     resetBtn.on("click", () => {
@@ -1717,7 +1717,7 @@ function drawRadarChart(data) {
         const pillW = Math.max(70, textLen);
 
         const item = legendG.append("g").attr("transform", `translate(${currentX}, 0)`);
-        
+
         // 2. Main Pill Background
         item.append("rect")
             .attr("width", pillW)
@@ -1758,15 +1758,15 @@ function drawRadarChart(data) {
             closeG.append("circle")
                 .attr("r", 6)
                 .style("fill", "rgba(255,255,255,0.05)")
-                .on("mouseover", function() { d3.select(this).style("fill", "rgba(255,255,255,0.15)"); })
-                .on("mouseout", function() { d3.select(this).style("fill", "rgba(255,255,255,0.05)"); });
+                .on("mouseover", function () { d3.select(this).style("fill", "rgba(255,255,255,0.15)"); })
+                .on("mouseout", function () { d3.select(this).style("fill", "rgba(255,255,255,0.05)"); });
 
             closeG.append("path")
                 .attr("d", "M-2.5,-2.5 L2.5,2.5 M2.5,-2.5 L-2.5,2.5")
                 .style("stroke", "rgba(255,255,255,0.5)")
                 .style("stroke-width", "1.2px");
         }
-            
+
         currentX += pillW + 10;
     });
 }
@@ -3342,10 +3342,19 @@ function initKeyChart() {
     const g = keyChartSvg.select('.key-chart-main-g');
     if (keyChartSimulation) keyChartSimulation.stop();
 
+    // SIMPLE APPEARING ANIMATION (Unified Scale Fade)
+    g.interrupt(); // Stop any current transition
+    g.attr('transform', `translate(${width / 2}, ${height / 2}) scale(0.9)`)
+        .style('opacity', 0)
+        .transition().duration(600)
+        .ease(d3.easeCubicOut)
+        .attr('transform', `translate(${width / 2}, ${height / 2}) scale(1)`)
+        .style('opacity', 1);
+
     const keysMap = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
     // Circle of Fifths Sequence: C, G, D, A, E, B, Gb/F#, Db/C#, Ab, Eb, Bb, F
     const circleOfFifths = [0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5];
-    
+
     const plotData = dataset.filter(d => !isNaN(d.key) && !isNaN(d.mode));
 
     const backBtn = d3.select("#keyChartBackBtn");
@@ -3364,7 +3373,7 @@ function initKeyChart() {
 
         // Prepare data for 2 rings
         const rollup = d3.rollup(plotData, v => v.length, d => d.key, d => d.mode);
-        
+
         let circleData = [];
         circleOfFifths.forEach((k, i) => {
             // Major (Outer)
@@ -3376,12 +3385,13 @@ function initKeyChart() {
                 order: i,
                 isMajor: true
             });
-            // Minor (Inner)
+            // Minor (Inner) - Relative Minor: (k + 9) % 12
+            const relMinorKey = (k + 9) % 12;
             circleData.push({
-                key: k,
+                key: relMinorKey,
                 mode: 0,
-                count: (rollup.get(k) && rollup.get(k).get(0)) || 0,
-                label: keysMap[k] + "m",
+                count: (rollup.get(relMinorKey) && rollup.get(relMinorKey).get(0)) || 0,
+                label: keysMap[relMinorKey] + "m",
                 order: i,
                 isMajor: false
             });
@@ -3432,7 +3442,7 @@ function initKeyChart() {
             .attr("r", innerRadius - 5)
             .style("fill", "rgba(255,255,255,0.03)")
             .style("stroke", "rgba(255,255,255,0.05)");
-            
+
         g.append("text")
             .attr("text-anchor", "middle")
             .attr("dy", "0.35em")
@@ -3445,7 +3455,9 @@ function initKeyChart() {
 
         segments.enter().append('path')
             .attr('class', 'key-segment')
+            // Static Initial state (No movement/flying)
             .attr('d', d => d.isMajor ? arcMajor(d) : arcMinor(d))
+            .style('opacity', 0)
             .style('fill', d => d.isMajor ? '#2dd4bf' : '#fb7185')
             .style('stroke', d => {
                 const isSel = selectedTrack && selectedTrack.key === d.key && selectedTrack.mode === d.mode;
@@ -3502,13 +3514,22 @@ function initKeyChart() {
                     .attr('d', d.isMajor ? arcMajor(d) : arcMinor(d))
                     .style('opacity', opacityScale(d.count))
                     .style('stroke', 'rgba(255,255,255,0.1)');
-                
+
                 d3.select('#tooltip').transition().duration(300).style('opacity', 0);
 
                 // Reset Label Size
                 g.select(`#label-${d.key}-${d.mode}`)
                     .transition().duration(200)
                     .style('font-size', d.isMajor ? '10px' : '9px');
+            })
+            // QUICK SIMULTANEOUS FADE-IN (Static Entry)
+            .transition().duration(400)
+            .ease(d3.easeCubicOut)
+            .style('opacity', d => {
+                const isSel = selectedTrack && selectedTrack.key === d.key && selectedTrack.mode === d.mode;
+                const isComp = comparisonTrack && comparisonTrack.key === d.key && comparisonTrack.mode === d.mode;
+                if (isSel || isComp) return 1.0;
+                return opacityScale(d.count);
             });
 
         // Labels
@@ -3526,7 +3547,10 @@ function initKeyChart() {
             .style('font-size', d => d.isMajor ? '10px' : '9px')
             .style('font-weight', 'bold')
             .style('pointer-events', 'none')
-            .text(d => d.label);
+            .style('opacity', 0)
+            .text(d => d.label)
+            .transition().duration(300)
+            .style('opacity', 1);
 
     } else {
         // LEVEL 2: SONG BUBBLES (Drill-down)
@@ -3541,7 +3565,7 @@ function initKeyChart() {
         const color = keyChartActiveMode === 1 ? '#2dd4bf' : '#fb7185';
 
         songsFiltered.forEach(d => {
-            d.r = baseRadius + Math.random() * (baseRadius / 2);
+            d.r = baseRadius;
             d.x = (Math.random() - 0.5) * 50;
             d.y = (Math.random() - 0.5) * 50;
         });
