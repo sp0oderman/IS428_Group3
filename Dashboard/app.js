@@ -568,6 +568,24 @@ function initOneBubbleChart(cfg) {
         .on('click', function () {
             toggleSongSelection(null);
             d3.select("#songDropdown").property("value", "");
+        })
+        .on('mouseleave', function () {
+            // Global Hover Reset: Dismiss tooltip and restore dot context
+            d3.select('#tooltip').transition().duration(200).style('opacity', 0);
+
+            svg.selectAll('.feature-bubble')
+                .transition().duration(300)
+                .style('stroke-width', p => {
+                    const isSel = selectedTrack && selectedTrack.Title === p.Title;
+                    const isComp = comparisonTrack && comparisonTrack.Title === p.Title;
+                    return (isSel || isComp) ? 2.5 : 0.8;
+                })
+                .style('opacity', p => {
+                    if (!selectedTrack && !comparisonTrack) return 0.55;
+                    const isSel = selectedTrack && selectedTrack.Title === p.Title;
+                    const isComp = comparisonTrack && comparisonTrack.Title === p.Title;
+                    return (isSel || isComp) ? 1 : 0.15;
+                });
         });
 
     const svg = rootSvg.append('g')
