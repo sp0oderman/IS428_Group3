@@ -138,7 +138,7 @@ Promise.all([
     computeYearlyTrends();
 
     // Update Dynamic Title
-    d3.select("#trendHeader").text(`Feature Averages vs Time (${minYear} - ${maxYear})`);
+    d3.select("#trendHeader").text(`Feature Averages vs Time`);
 
     const yearSlider = d3.select("#yearSlider");
     yearSlider.attr("min", minYear).attr("max", maxYear).attr("value", minYear);
@@ -382,8 +382,19 @@ function applyFilters() {
         updateTopicEvolutionChart();
     }, 10);
 }
-
 function toggleSongSelection(track) {
+    // SYNC YEAR IF TRACK IS FROM A DIFFERENT PERIOD
+    if (track && track.Year && track.Year !== selectedYear) {
+        selectedYear = track.Year;
+        const slider = document.getElementById("yearSlider");
+        if (slider) {
+            slider.value = selectedYear;
+            d3.select("#yearLabel").text(selectedYear);
+        }
+        // Force refresh dataset for the new year
+        dataset = originalDataset.filter(d => d.Year === selectedYear);
+    }
+
     if (!track) {
         selectedTrack = null;
         comparisonTrack = null;
@@ -884,6 +895,11 @@ function updateOneBubbleChart(cfg) {
             const isComp = comparisonTrack && d.Title === comparisonTrack.Title;
             return (isSel || isComp) ? 1 : 0.15;
         });
+
+    // Bring selected tracks to front of the layer
+    cfg.dotGroup.selectAll('.feature-bubble')
+        .filter(d => (selectedTrack && d.Title === selectedTrack.Title) || (comparisonTrack && d.Title === comparisonTrack.Title))
+        .raise();
 
     // -- Average Marker: Radiant Yellow crosshair (Option C) --
     const ax = cfg.x(avgX);
@@ -2258,7 +2274,7 @@ function initTrendLines() {
 
     svg.append("g").attr("class", "axis x-axis").attr("transform", `translate(0, ${height})`)
         .call(d3.axisBottom(x));
-    svg.append("g").attr("class", "axis y-axis").call(d3.axisLeft(y).ticks(5).tickFormat(d3.format(".0%")));
+    svg.append("g").attr("class", "axis y-axis").call(d3.axisLeft(y).ticks(5).tickFormat(d3.format(".1f")));
 
     // Y-axis label
     svg.append("text")
