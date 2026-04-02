@@ -498,6 +498,7 @@ const bubbleChartConfigs = [
         xSelectId: 'bubbleXSelectA',
         ySelectId: 'bubbleYSelectA',
         sizeSelectId: 'bubbleSizeSelectA',
+        colorSelectId: 'bubbleColorSelectA',
         statSongsId: 'bubbleStatSongsA',
         statXId: 'bubbleStatXA',
         statYId: 'bubbleStatYA',
@@ -505,7 +506,8 @@ const bubbleChartConfigs = [
         statYLabelId: 'bubbleStatYLabelA',
         xFeature: 'valence',
         yFeature: 'energy',
-        sizeFeature: 'Streams'
+        sizeFeature: 'Streams',
+        colorFeature: 'None'
     },
     {
         id: 'B',
@@ -513,6 +515,7 @@ const bubbleChartConfigs = [
         xSelectId: 'bubbleXSelectB',
         ySelectId: 'bubbleYSelectB',
         sizeSelectId: 'bubbleSizeSelectB',
+        colorSelectId: 'bubbleColorSelectB',
         statSongsId: 'bubbleStatSongsB',
         statXId: 'bubbleStatXB',
         statYId: 'bubbleStatYB',
@@ -520,7 +523,8 @@ const bubbleChartConfigs = [
         statYLabelId: 'bubbleStatYLabelB',
         xFeature: 'danceability',
         yFeature: 'acousticness',
-        sizeFeature: 'Streams'
+        sizeFeature: 'Streams',
+        colorFeature: 'valence'
     }
 ];
 
@@ -533,7 +537,8 @@ function initOneBubbleChart(cfg) {
     if (!containerNode) return;
 
     const featuresList = [...allFeatures];
-    const sizeOptions = ['Streams', ...featuresList];
+    const sizeOptions = ['None', 'Streams', ...featuresList];
+    const colorOptions = ['None', ...featuresList];
 
     // Populate dropdowns
     [cfg.xSelectId, cfg.ySelectId].forEach(selId => {
@@ -542,18 +547,28 @@ function initOneBubbleChart(cfg) {
             .text(d => d.replace(/_/g, ' '))
             .attr('value', d => d);
     });
+    
+    // Size Dropdown
     const sizeSel = d3.select('#' + cfg.sizeSelectId);
     sizeSel.selectAll('option').data(sizeOptions).enter().append('option')
+        .text(d => d.replace(/_/g, ' '))
+        .attr('value', d => d);
+    
+    // Color Dropdown
+    const colorSel = d3.select('#' + cfg.colorSelectId);
+    colorSel.selectAll('option').data(colorOptions).enter().append('option')
         .text(d => d.replace(/_/g, ' '))
         .attr('value', d => d);
 
     d3.select('#' + cfg.xSelectId).property('value', cfg.xFeature);
     d3.select('#' + cfg.ySelectId).property('value', cfg.yFeature);
     d3.select('#' + cfg.sizeSelectId).property('value', cfg.sizeFeature);
+    d3.select('#' + cfg.colorSelectId).property('value', cfg.colorFeature);
 
     d3.select('#' + cfg.xSelectId).on('change', function () { cfg.xFeature = this.value; updateOneBubbleChart(cfg); });
     d3.select('#' + cfg.ySelectId).on('change', function () { cfg.yFeature = this.value; updateOneBubbleChart(cfg); });
     d3.select('#' + cfg.sizeSelectId).on('change', function () { cfg.sizeFeature = this.value; updateOneBubbleChart(cfg); });
+    d3.select('#' + cfg.colorSelectId).on('change', function () { cfg.colorFeature = this.value; updateOneBubbleChart(cfg); });
 
     // Build SVG — force square using the container's rendered clientWidth
     const margin = { top: 50, right: 30, bottom: 100, left: 80 };
@@ -650,16 +665,25 @@ function updateOneBubbleChart(cfg) {
     const xF = cfg.xFeature;
     const yF = cfg.yFeature;
     const sF = cfg.sizeFeature;
+    const cF = cfg.colorFeature;
     const size = cfg.size;
 
     // Domains
     cfg.x.domain([featureStats[xF].min, featureStats[xF].max]).nice();
     cfg.y.domain([featureStats[yF].min, featureStats[yF].max]).nice();
 
-    let sExt = sF === 'Streams'
+    let sExt = (sF === 'None') ? [0, 1] : (sF === 'Streams'
         ? [0, d3.max(originalDataset, d => d.Streams) || 1]
-        : [featureStats[sF].min, featureStats[sF].max];
+        : [featureStats[sF].min, featureStats[sF].max]);
     cfg.r.domain(sExt);
+
+    // Color Scale: Blue Intensity (Dark to Bright)
+    let colorScale = null;
+    if (cF && cF !== 'None') {
+        colorScale = d3.scaleLinear()
+            .domain([featureStats[cF].min, featureStats[cF].max])
+            .range(["#1e293b", "#38bdf8"]); 
+    }
 
     // Grid
     cfg.gridGroup.selectAll('.grid-line').remove();
@@ -789,15 +813,22 @@ function updateOneBubbleChart(cfg) {
                 .style('opacity', 0.05);
 
             // Read live from cfg so the tooltip is always correct after dropdown changes
-            const _xF = cfg.xFeature, _yF = cfg.yFeature, _sF = cfg.sizeFeature;
+            const _xF = cfg.xFeature, _yF = cfg.yFeature, _sF = cfg.sizeFeature, _cF = cfg.colorFeature;
             tTip.transition().duration(200).style('opacity', 1);
+
+            let colorHtml = "";
+            if (_cF && _cF !== "None" && colorScale) {
+                colorHtml = `<div>${featureLabel(_cF)}: <strong style="color:#fff; text-shadow:0 0 5px ${colorScale(d[_cF])}">${formatFeatureVal(_cF, d[_cF])}</strong> <span style="font-size:0.65rem;color:rgba(255,255,255,0.45)">(color)</span></div>`;
+            }
+
             tTip.html(`
                 <div class="tooltip-title">${d.Title}</div>
                 <div>Artist: ${d.Artist}</div>
                 <div style="margin-top:5px;border-top:1px solid rgba(255,255,255,0.1);padding-top:5px;">
                     <div>${featureLabel(_xF)}: <strong style="color:var(--accent)">${formatFeatureVal(_xF, d[_xF])}</strong></div>
                     <div>${featureLabel(_yF)}: <strong style="color:var(--accent)">${formatFeatureVal(_yF, d[_yF])}</strong></div>
-                    <div>${featureLabel(_sF)}: <strong>${_sF === 'Streams' ? d3.format(',')(d.Streams) : formatFeatureVal(_sF, d[_sF])}</strong> <span style="font-size:0.65rem;color:rgba(255,255,255,0.45)">(size)</span></div>
+                    ${_sF !== "None" ? `<div>${featureLabel(_sF)}: <strong>${_sF === 'Streams' ? d3.format(',')(d.Streams) : formatFeatureVal(_sF, d[_sF])}</strong> <span style="font-size:0.65rem;color:rgba(255,255,255,0.45)">(size)</span></div>` : ""}
+                    ${colorHtml}
                 </div>
             `)
                 .style('left', (event.pageX + 15) + 'px')
@@ -828,11 +859,11 @@ function updateOneBubbleChart(cfg) {
         .transition().duration(globalAnimationDuration)
         .attr('cx', d => cfg.x(d[xF]))
         .attr('cy', d => cfg.y(d[yF]))
-        .attr('r', d => cfg.r(sF === 'Streams' ? d.Streams : d[sF]))
+        .attr('r', d => (sF === 'None') ? 6.5 : cfg.r(sF === 'Streams' ? d.Streams : d[sF]))
         .style('fill', d => {
             if (selectedTrack && d.Title === selectedTrack.Title) return 'var(--sel-stroke)';
             if (comparisonTrack && d.Title === comparisonTrack.Title) return 'var(--comp-stroke)';
-            return 'var(--accent)';
+            return (cF && cF !== 'None') ? colorScale(d[cF]) : 'var(--accent)';
         })
         .style('stroke', '#fff')
         .style('stroke-width', d => {

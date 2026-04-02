@@ -355,6 +355,7 @@ select {
 .scatter-plot-item h3 {
     font-size: 0.95rem;
     text-align: center;
+    margin-top: 24px;
     margin-bottom: 8px;
     color: var(--accent);
 }

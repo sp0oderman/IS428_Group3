@@ -195,8 +195,8 @@
             </div>
 
             <div class="chart-header" style="margin-bottom: 20px;">
-                <h2>Bubble Chart Correlations</h2>
-                <p class="subtitle">Plot any two audio features with bubble size to find hidden relationships.</p>
+                <h2>Multivariate Bubble Chart</h2>
+                <p class="subtitle">Plot any two or more audio features with bubble size and color to find hidden relationships.</p>
             </div>
 
             <!-- Dual Scatterplot Row -->
@@ -216,6 +216,10 @@
                         <label
                             style="font-size: 0.8rem; margin: 0; display: flex; align-items: center; gap: 5px; color: var(--text-secondary);">Size:
                             <select id="bubbleSizeSelectA" style="padding: 4px 8px; font-size: 0.8rem;"></select>
+                        </label>
+                        <label
+                            style="font-size: 0.8rem; margin: 0; display: flex; align-items: center; gap: 5px; color: var(--text-secondary);">Color:
+                            <select id="bubbleColorSelectA" style="padding: 4px 8px; font-size: 0.8rem;"></select>
                         </label>
                     </div>
                     <div id="featureBubbleChartA"
@@ -260,6 +264,10 @@
                         <label
                             style="font-size: 0.8rem; margin: 0; display: flex; align-items: center; gap: 5px; color: var(--text-secondary);">Size:
                             <select id="bubbleSizeSelectB" style="padding: 4px 8px; font-size: 0.8rem;"></select>
+                        </label>
+                        <label
+                            style="font-size: 0.8rem; margin: 0; display: flex; align-items: center; gap: 5px; color: var(--text-secondary);">Color:
+                            <select id="bubbleColorSelectB" style="padding: 4px 8px; font-size: 0.8rem;"></select>
                         </label>
                     </div>
                     <div id="featureBubbleChartB"
