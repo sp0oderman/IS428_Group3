@@ -1,6 +1,6 @@
 # Spotify Audio Features Dashboard
 
-Welcome to the Spotify Audio Features Dashboard project from IS428 Group 3. This interactive dashboard allows you to explore and visualize various audio features of Spotify tracks.
+Welcome to the Spotify Audio Features Dashboard project from IS428 Group 3. This interactive dashboard allows you to explore and visualise various audio features of Spotify hit songs.
 
 ## Getting Started
 

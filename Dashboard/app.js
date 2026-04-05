@@ -7,6 +7,7 @@ let comparisonTrack = null; // SLOT 2 for Comparison Mode
 let selectedTopic = null;
 let activeArtist = null; // Track the currently selected artist for highlighting
 let nextOverwriteSlot = 'primary'; // Track which slot to overwrite next when both are full
+let latestSelectedTrack = null; // Track the most recently clicked track for Spotify Embed
 let globalAnimationDuration = 0;
 let minYear;
 let maxYear;
@@ -62,6 +63,26 @@ function formatDuration(fracMin) {
 
 let featureStats = {};
 const colorScale = d3.scaleOrdinal(); // Will be populated after data load
+
+// GLOBAL FEATURE COLOR SCALE (Synchronized across all feature charts)
+const distinctColors = [
+    '#38bdf8', // sky blue      — danceability
+    '#f97316', // orange        — energy
+    '#a78bfa', // violet        — loudness
+    '#34d399', // emerald       — speechiness
+    '#f43f5e', // rose          — acousticness
+    '#facc15', // amber         — instrumentalness
+    '#22d3ee', // cyan          — liveness
+    '#c084fc', // purple        — valence
+    '#fb923c', // light orange  — tempo
+    '#4ade80', // green         — time signature
+    '#e879f9', // fuchsia       — mode
+    '#60a5fa', // blue          — key
+    '#ff6b6b', // coral         — Flesch Kincaid Grade
+    '#6ee7b7', // mint          — Lexical Diversity
+    '#fbbf24', // gold          — Avg Word Length
+];
+const featureColor = d3.scaleOrdinal().domain(['danceability', 'energy', 'loudness', 'speechiness', 'acousticness', 'instrumentalness', 'liveness', 'valence', 'tempo', 'time_signature', 'mode', 'key', 'Flesch_Kincaid_Grade', 'Lexical_Diversity', 'Avg_Word_Length']).range(distinctColors);
 
 // Human-readable display name for any feature key
 const featureLabelMap = {
@@ -369,11 +390,16 @@ function toggleSongSelection(track) {
         if (isPrimary) {
             // Deselect Only Primary
             selectedTrack = null;
+            // Fallback to Comparison for preview
+            latestSelectedTrack = comparisonTrack;
         } else if (isComparison) {
             // Deselect Only Comparison
             comparisonTrack = null;
+            // Fallback to Primary for preview
+            latestSelectedTrack = selectedTrack;
         } else {
             // New Selection: Fill empty slots first, then alternate overwriting
+            latestSelectedTrack = track; // Track most recent click for preview
             if (!selectedTrack) {
                 selectedTrack = track;
             } else if (!comparisonTrack) {
@@ -413,8 +439,8 @@ function updateDashboard() {
         label.text("Track Comparison");
     }
 
-    if (selectedTrack && selectedTrack.href) {
-        const embedUrl = selectedTrack.href.replace("/track/", "/embed/track/");
+    if (latestSelectedTrack && latestSelectedTrack.href) {
+        const embedUrl = latestSelectedTrack.href.replace("/track/", "/embed/track/");
         const iframe = d3.select("#spotifyIframe");
         if (iframe.attr("src") !== embedUrl) {
             iframe.attr("src", embedUrl);
@@ -2305,26 +2331,7 @@ function initTrendLines() {
         .style("font-size", "12px")
         .text("Relative Normalized Value");
 
-    // Hand-curated palette — 15 perceptually distinct colors, one per feature
-    const distinctColors = [
-        '#38bdf8', // sky blue      — danceability
-        '#f97316', // orange        — energy
-        '#a78bfa', // violet        — loudness
-        '#34d399', // emerald       — speechiness
-        '#f43f5e', // rose          — acousticness
-        '#facc15', // amber         — instrumentalness
-        '#22d3ee', // cyan          — liveness
-        '#c084fc', // purple        — valence
-        '#fb923c', // light orange  — tempo
-        '#4ade80', // green         — time signature
-        '#e879f9', // fuchsia       — mode
-        '#60a5fa', // blue          — key
-        '#ff6b6b', // coral         — Flesch Kincaid Grade
-        '#6ee7b7', // mint          — Lexical Diversity
-        '#fbbf24', // gold          — Avg Word Length
-    ];
-    const featureColor = d3.scaleOrdinal().domain(allFeatures).range(distinctColors);
-
+    // Uses global featureColor scale for consistency
     const lineMap = {};
     const markerMap = {};
 
@@ -2581,7 +2588,7 @@ function initRidgeline() {
 
     svg.select(".y-axis .domain").remove();
 
-    const featureColor = d3.scaleOrdinal(d3.schemeCategory10).domain(allFeatures);
+    // Uses global featureColor scale for consistency
     const kde = kernelDensityEstimator(kernelEpanechnikov(0.04), x.ticks(60));
 
     ridgelineData = { svg, x, yName, kde, featureColor, yearsArr, width, height };
