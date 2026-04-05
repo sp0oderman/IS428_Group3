@@ -167,7 +167,7 @@ select {
 
 .dashboard-container {
     display: grid;
-    grid-template-columns: var(--sidebar-w) 6px minmax(0, 1fr);
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
     width: 100%;
     flex: 1;
     /* Take remaining height */
@@ -177,35 +177,7 @@ select {
     /* Padding for the panels within the dashboard view */
 }
 
-.resizer {
-    width: 6px;
-    cursor: col-resize;
-    background: rgba(255, 255, 255, 0.04);
-    border-left: 1px solid rgba(255, 255, 255, 0.06);
-    border-right: 1px solid rgba(255, 255, 255, 0.06);
-    transition: background 0.15s;
-    position: relative;
-    z-index: 10;
-    flex-shrink: 0;
-}
 
-.resizer:hover,
-.resizer.dragging {
-    background: rgba(168, 85, 247, 0.35);
-    border-color: rgba(168, 85, 247, 0.5);
-}
-
-.resizer::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 2px;
-    height: 40px;
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 2px;
-}
 
 .sidebar {
     padding: 20px;
@@ -236,6 +208,14 @@ select {
     border: 1px solid rgba(255, 255, 255, 0.05);
     padding: 10px;
 }
+
+.active-artist-label {
+    fill: var(--accent) !important;
+    filter: drop-shadow(0 0 5px var(--accent)) drop-shadow(0 0 10px var(--accent));
+    font-weight: 900 !important;
+    transition: all 0.4s ease;
+}
+
 
 
 .chart-legend-bar {

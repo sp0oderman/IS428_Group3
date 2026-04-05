@@ -61,16 +61,17 @@
         <!-- Sidebar: Radar & Bubble Chart -->
         <aside class="sidebar glass-panel">
             <div class="chart-header">
-                <h2>Sonic Filter Mixer</h2>
-                <p class="subtitle" style="font-size: 0.8rem; margin-bottom: 12px;">Refine your search by sonic
-                    intensity. Adjust the faders to see how your preferred sound signature performs among global hits.
-                </p>
-                <button id="resetMixerBtn" class="btn"
-                    style="width: 100%; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.4); font-size: 0.8rem; letter-spacing: 1px; text-transform: uppercase;">Reset
-                    All Faders</button>
+                <h2>Audio Feature Mixer</h2>
+                <p class="subtitle" style="font-size: 0.8rem; margin-bottom: 4px;">Refine your search by sonic intensity. Adjust the faders to see how your preferred sound signature performs among global hits.</p>
+                <div style="display: flex; justify-content: flex-end; margin-top: 8px;">
+                    <button id="resetMixerBtn" class="btn"
+                        style="padding: 4px 12px; font-size: 0.75rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); color: var(--text-secondary); font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 5px; border-radius: 4px; transition: all 0.3s ease;">
+                        RESET &#8634;
+                    </button>
+                </div>
             </div>
             <div id="mixerContainer"
-                style="width: 100%; height: 340px; display: flex; justify-content: space-around; padding: 20px 0 0px 0; margin-bottom: 0px;">
+                style="width: 100%; height: 340px; display: flex; justify-content: space-around; padding: 10px 0 0px 0; margin-bottom: 0px;">
                 <!-- D3 Faders -->
             </div>
 
@@ -164,7 +165,7 @@
         </aside>
 
         <!-- Drag-to-resize handle -->
-        <div class="resizer" id="panelResizer"></div>
+
 
         <!-- Main Content: Scatter Grids -->
         <main class="main-content glass-panel">
@@ -373,7 +374,7 @@
             <div class="chart-header"
                 style="margin-top: 40px; border-top: 1px solid var(--glass-border); padding-top: 20px; display: flex; justify-content: space-between; align-items: flex-start;">
                 <div>
-                    <h2>Lyric Categorical Stream</h2>
+                    <h2>Lyric Categorical Evolution</h2>
                     <p class="subtitle">The flow of narrative themes. Watch how lyric categories like "Love" or "Party"
                         surge and fade over time.</p>
                 </div>
@@ -396,7 +397,7 @@
             <div class="chart-header"
                 style="margin-top: 40px; border-top: 1px solid var(--glass-border); padding-top: 20px; display: flex; justify-content: space-between; align-items: flex-start;">
                 <div>
-                    <h2>Deep Topic Trends</h2>
+                    <h2>Thematic Topic Evolution</h2>
                     <p class="subtitle">Complex topic mapping derived from analysis of lyrical contents across
                         the years.</p>
                 </div>

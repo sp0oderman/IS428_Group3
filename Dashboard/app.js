@@ -5,6 +5,8 @@ let globalAverages = {};
 let selectedTrack = null;
 let comparisonTrack = null; // SLOT 2 for Comparison Mode
 let selectedTopic = null;
+let activeArtist = null; // Track the currently selected artist for highlighting
+let nextOverwriteSlot = 'primary'; // Track which slot to overwrite next when both are full
 let globalAnimationDuration = 0;
 let minYear;
 let maxYear;
@@ -68,7 +70,7 @@ const featureLabelMap = {
 };
 function featureLabel(f) {
     if (featureLabelMap[f]) return featureLabelMap[f];
-    return f.charAt(0).toUpperCase() + f.slice(1).replace(/_/g, ' ');
+    return f.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 }
 
 // Format a feature value for display — duration_min uses M.SS, tempo uses integer, others 2dp
@@ -218,46 +220,7 @@ Promise.all([
     initTopicEvolutionChart();
     initMixer();
 
-    // Sidebar Resizer Logic
-    const resizer = document.getElementById("panelResizer");
-    const dashContainer = document.querySelector(".dashboard-container");
-    if (resizer) {
-        let isResizing = false;
-        resizer.addEventListener("mousedown", (e) => {
-            isResizing = true;
-            resizer.classList.add("dragging");
-            document.body.style.cursor = "col-resize";
-            document.body.style.userSelect = "none";
-        });
-        window.addEventListener("mousemove", (e) => {
-            if (!isResizing) return;
-            const newWidth = Math.max(300, Math.min(1000, e.clientX - 20)); // Adjust for body padding
-            document.documentElement.style.setProperty("--sidebar-w", newWidth + "px");
-        });
-        window.addEventListener("mouseup", () => {
-            if (isResizing) {
-                isResizing = false;
-                resizer.classList.remove("dragging");
-                document.body.style.cursor = "default";
-                document.body.style.userSelect = "auto";
-                // Debounced update for charts
-                updateDashboard();
-                initRadarChart();
-                initBubbleChart();
-                initArtistBarChart();
-                updateTrendLines();
-                initKeyChart();
-                updateWordCloud();
-                updateWordCategoryBarChart();
-                updateLyricEvolutionChart();
-                updateTopicEvolutionChart();
-                initFeatureBubbleChart();
-                initDistributionCurves();
-                initRidgeline();
-                initParallelChart();
-            }
-        });
-    }
+
 }).catch(err => {
     console.error("Error loading CSV file:", err);
 });
@@ -404,18 +367,27 @@ function toggleSongSelection(track) {
         const isComparison = comparisonTrack && comparisonTrack.Title === track.Title;
 
         if (isPrimary) {
-            // Deselect Primary -> Shift Comparison to Primary
-            selectedTrack = comparisonTrack;
-            comparisonTrack = null;
+            // Deselect Only Primary
+            selectedTrack = null;
         } else if (isComparison) {
-            // Deselect Comparison
+            // Deselect Only Comparison
             comparisonTrack = null;
         } else {
-            // New Selection: Shift previous primary into comparison slot, new becomes primary
-            if (selectedTrack) {
-                comparisonTrack = selectedTrack;
+            // New Selection: Fill empty slots first, then alternate overwriting
+            if (!selectedTrack) {
+                selectedTrack = track;
+            } else if (!comparisonTrack) {
+                comparisonTrack = track;
+            } else {
+                // Both full: Alternating overwrite system (Pink -> Blue -> Pink...)
+                if (nextOverwriteSlot === 'primary') {
+                    selectedTrack = track;
+                    nextOverwriteSlot = 'comparison';
+                } else {
+                    comparisonTrack = track;
+                    nextOverwriteSlot = 'primary';
+                }
             }
-            selectedTrack = track;
         }
     }
 
@@ -468,6 +440,7 @@ function updateDashboard() {
     updateLyricEvolutionChart();
     updateTopicEvolutionChart();
     updateMixer();
+    if (window.updateBubbleSelection) window.updateBubbleSelection();
 }
 
 function initFeatureToggles() {
@@ -555,20 +528,20 @@ function initOneBubbleChart(cfg) {
     [cfg.xSelectId, cfg.ySelectId].forEach(selId => {
         const sel = d3.select('#' + selId);
         sel.selectAll('option').data(featuresList).enter().append('option')
-            .text(d => d.replace(/_/g, ' '))
+            .text(d => featureLabel(d))
             .attr('value', d => d);
     });
     
     // Size Dropdown
     const sizeSel = d3.select('#' + cfg.sizeSelectId);
     sizeSel.selectAll('option').data(sizeOptions).enter().append('option')
-        .text(d => d.replace(/_/g, ' '))
+        .text(d => d === 'None' || d === 'Streams' ? d : featureLabel(d))
         .attr('value', d => d);
     
     // Color Dropdown
     const colorSel = d3.select('#' + cfg.colorSelectId);
     colorSel.selectAll('option').data(colorOptions).enter().append('option')
-        .text(d => d.replace(/_/g, ' '))
+        .text(d => d === 'None' ? d : featureLabel(d))
         .attr('value', d => d);
 
     d3.select('#' + cfg.xSelectId).property('value', cfg.xFeature);
@@ -1947,7 +1920,34 @@ function initBubbleChart() {
             .style("opacity", 1);
     }
 
+    // Expose selection update globally
+    window.updateBubbleSelection = () => {
+        const hasAnySelection = !!(selectedTrack || comparisonTrack);
+
+        g.selectAll(".songNode").each(function(d) {
+            const isSel = (selectedTrack && selectedTrack.Title === d.data.data.Title);
+            const isComp = (comparisonTrack && comparisonTrack.Title === d.data.data.Title);
+            const isPicked = isSel || isComp;
+
+            const targetOpacity = isPicked ? 1 : (hasAnySelection ? 0.08 : 0.7);
+            const selectionColor = isSel ? "var(--sel-stroke)" : (isComp ? "var(--comp-stroke)" : "var(--accent)");
+
+            d3.select(this).select("circle")
+                .transition().duration(300)
+                .style("opacity", targetOpacity)
+                .style("stroke", isPicked ? selectionColor : "none")
+                .style("stroke-width", isPicked ? 3 : 0)
+                .style("filter", isPicked ? `drop-shadow(0 0 8px ${selectionColor})` : "none");
+
+            d3.select(this).select("text")
+                .transition().duration(300)
+                .style("opacity", isPicked ? 1 : (hasAnySelection ? 0.1 : 1));
+        });
+    };
+
     function renderSongs(artistData) {
+        activeArtist = artistData.name;
+        updateArtistBarChart(); // refresh leaderboard to show glow
         g.selectAll("*").remove();
 
         const songsData = artistData.songs.map(s => ({
@@ -1965,6 +1965,8 @@ function initBubbleChart() {
             .style("cursor", "pointer")
             .on("click", (event) => {
                 event.stopPropagation();
+                activeArtist = null;
+                updateArtistBarChart(); // remove glow
                 backBtn.remove();
                 renderArtists();
             });
@@ -1996,9 +1998,18 @@ function initBubbleChart() {
                 const isSel = (selectedTrack && selectedTrack.Title === d.data.data.Title);
                 const isComp = (comparisonTrack && comparisonTrack.Title === d.data.data.Title);
                 const hasAnySelection = selectedTrack || comparisonTrack;
-
-                if (isSel || isComp) return 1;
-                return hasAnySelection ? 0.15 : 0.6; // High isolation if a song is selected
+                return (isSel || isComp) ? 1 : (hasAnySelection ? 0.08 : 0.7);
+            })
+            .style("stroke", d => {
+                if (selectedTrack && selectedTrack.Title === d.data.data.Title) return "var(--sel-stroke)";
+                if (comparisonTrack && comparisonTrack.Title === d.data.data.Title) return "var(--comp-stroke)";
+                return "none";
+            })
+            .style("stroke-width", d => (selectedTrack && selectedTrack.Title === d.data.data.Title) || (comparisonTrack && comparisonTrack.Title === d.data.data.Title) ? 3 : 0)
+            .style("filter", d => {
+                if (selectedTrack && selectedTrack.Title === d.data.data.Title) return "drop-shadow(0 0 8px var(--sel-stroke))";
+                if (comparisonTrack && comparisonTrack.Title === d.data.data.Title) return "drop-shadow(0 0 8px var(--comp-stroke))";
+                return "none";
             })
             .on("mouseover", function (event, d) {
                 d3.select(this).transition().duration(200).style("opacity", 1).attr("r", (d.r * 0.95) * 1.05);
@@ -2006,9 +2017,12 @@ function initBubbleChart() {
             .on("mouseout", function (event, d) {
                 const isSel = (selectedTrack && selectedTrack.Title === d.data.data.Title);
                 const isComp = (comparisonTrack && comparisonTrack.Title === d.data.data.Title);
+                const isPicked = isSel || isComp;
                 const hasAnySelection = selectedTrack || comparisonTrack;
 
-                d3.select(this).transition().duration(200).style("opacity", (isSel || isComp) ? 1 : (hasAnySelection ? 0.15 : 0.6)).attr("r", d.r * 0.95);
+                d3.select(this).transition().duration(200)
+                    .style("opacity", isPicked ? 1 : (hasAnySelection ? 0.08 : 0.7))
+                    .attr("r", d.r * 0.95);
             })
             .transition().duration(500)
             .delay((d, i) => i * 15)
@@ -2196,7 +2210,7 @@ function updateArtistBarChart() {
 
     // Artist name floating left of the bar
     enterBars.append("text")
-        .attr("class", "artist-label")
+        .attr("class", d => `artist-label artist-label-${safeId(d.artist)}`)
         .attr("x", -5)
         .attr("y", y.bandwidth() / 2)
         .attr("dy", "0.3em")
@@ -2236,6 +2250,10 @@ function updateArtistBarChart() {
     // Update texts inside (optional, in case tracks change dynamically)
     mergeBars.select(".stat-label")
         .text(d => d.songs + " Tracks");
+
+    // Apply Glow effect based on global activeArtist state
+    mergeBars.select(".artist-label")
+        .classed("active-artist-label", d => d.artist === activeArtist);
 }
 
 /* ---------------------------------------------------------
@@ -3302,8 +3320,18 @@ function initWordCloud() {
     updateWordCloud();
 }
 
+let lastWordCloudYear = -1;
+let lastWordCloudCategory = null;
+
 function updateWordCloud() {
     if (!wordCloudGroup) return;
+
+    // STABILIZATION: Only re-render if year or category actually changed
+    if (selectedYear === lastWordCloudYear && selectedWordCategory === lastWordCloudCategory) {
+        return; 
+    }
+    lastWordCloudYear = selectedYear;
+    lastWordCloudCategory = selectedWordCategory;
 
     // 1. Filter dataset by year (or aggregate if All Time)
     let wordsData = [];
@@ -3431,7 +3459,7 @@ function initKeyChart() {
         .attr('transform', `translate(${width / 2}, ${height / 2}) scale(1)`)
         .style('opacity', 1);
 
-    const keysMap = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const keysMap = ['C', 'C#/Db', 'D', 'D#/Eb', 'E', 'F', 'F#/Gb', 'G', 'G#', 'A', 'A#/Bb', 'B'];
     // Circle of Fifths Sequence: C, G, D, A, E, B, Gb/F#, Db/C#, Ab, Eb, Bb, F
     const circleOfFifths = [0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5];
 
@@ -3598,11 +3626,25 @@ function initKeyChart() {
                     .style('font-size', d.isMajor ? '14px' : '12px');
             })
             .on('mouseout', function (event, d) {
+                const isSel = selectedTrack && selectedTrack.key === d.key && selectedTrack.mode === d.mode;
+                const isComp = comparisonTrack && comparisonTrack.key === d.key && comparisonTrack.mode === d.mode;
+                const isPicked = isSel || isComp;
+
                 d3.select(this)
                     .transition().duration(300)
                     .attr('d', d.isMajor ? arcMajor(d) : arcMinor(d))
-                    .style('opacity', opacityScale(d.count))
-                    .style('stroke', 'rgba(255,255,255,0.1)');
+                    .style('opacity', isPicked ? 1.0 : opacityScale(d.count))
+                    .style('stroke', () => {
+                        if (isSel) return 'var(--sel-stroke)';
+                        if (isComp) return 'var(--comp-stroke)';
+                        return 'rgba(255,255,255,0.1)';
+                    })
+                    .style('stroke-width', isPicked ? '3px' : '1px')
+                    .style('filter', () => {
+                        if (isSel) return 'drop-shadow(0 0 15px var(--sel-stroke))';
+                        if (isComp) return 'drop-shadow(0 0 15px var(--comp-stroke))';
+                        return 'none';
+                    });
 
                 d3.select('#tooltip').transition().duration(300).style('opacity', 0);
 
@@ -3688,26 +3730,33 @@ function initKeyChart() {
         const dotsEnter = dots.enter().append('circle')
             .attr('class', 'key-song-bubble')
             .attr('r', d => d.r)
-            .style('fill', d => {
-                const isSel = (selectedTrack && selectedTrack.Title === d.Title);
-                const isComp = (comparisonTrack && comparisonTrack.Title === d.Title);
-                if (isSel) return '#38bdf8'; // Primary (Light Blue)
-                if (isComp) return '#f472b6'; // Comparison (Pink)
-                return color;
-            })
+            .style('fill', color) // Use the key's core color (Teal for Major, Rose for Minor)
             .style('opacity', d => {
                 const isSel = (selectedTrack && selectedTrack.Title === d.Title);
                 const isComp = (comparisonTrack && comparisonTrack.Title === d.Title);
                 if (isSel || isComp) return 1;
                 return (0.4 + (d.Sentiment_Score + 1) / 4);
             })
-            .style('stroke', '#fff')
+            .style('stroke', d => {
+                const isSel = (selectedTrack && selectedTrack.Title === d.Title);
+                const isComp = (comparisonTrack && comparisonTrack.Title === d.Title);
+                if (isSel) return 'var(--sel-stroke)'; // Primary (Pink)
+                if (isComp) return 'var(--comp-stroke)'; // Comparison (Blue)
+                return '#fff';
+            })
             .style('stroke-opacity', d => {
                 const isSel = (selectedTrack && selectedTrack.Title === d.Title);
                 const isComp = (comparisonTrack && comparisonTrack.Title === d.Title);
-                return (isSel || isComp) ? 1 : 0;
+                return (isSel || isComp) ? 1 : 0.15; // Low profile stroke for non-selected
             })
-            .style('stroke-width', 2)
+            .style('stroke-width', 2.5)
+            .style('filter', d => {
+                const isSel = (selectedTrack && selectedTrack.Title === d.Title);
+                const isComp = (comparisonTrack && comparisonTrack.Title === d.Title);
+                if (isSel) return 'drop-shadow(0 0 10px var(--sel-stroke))';
+                if (isComp) return 'drop-shadow(0 0 10px var(--comp-stroke))';
+                return 'none';
+            })
             .style('cursor', 'pointer')
             .on('mouseover', function (event, d) {
                 d3.select(this).raise().style('stroke-opacity', 1).attr('r', d.r + 3).style('opacity', 1);
@@ -4401,11 +4450,11 @@ function updateTopicEvolutionChart() {
                     const isHigh = (selectedTopic === ld.key) ||
                         (selectedTrack && selectedTrack.Topic === ld.key) ||
                         (comparisonTrack && comparisonTrack.Topic === ld.key);
-                    return isHigh ? "#fff" : topicColors[ld.key];
+                    return isHigh ? "#fff" : d3.color(topicColors[ld.key]).brighter(0.7);
                 })
                 .style("opacity", ld => {
                     const noSel = !selectedTopic && !selectedTrack && !comparisonTrack;
-                    if (noSel) return 0.6;
+                    if (noSel) return 0.85; // Slightly higher base opacity
                     const isHigh = (selectedTopic === ld.key) ||
                         (selectedTrack && selectedTrack.Topic === ld.key) ||
                         (comparisonTrack && comparisonTrack.Topic === ld.key);
@@ -4623,7 +4672,7 @@ function updateTopicEvolutionChart() {
             const isHigh = (selectedTopic === d.key) ||
                 (selectedTrack && selectedTrack.Topic === d.key) ||
                 (comparisonTrack && comparisonTrack.Topic === d.key);
-            return isHigh ? "#fff" : topicColors[d.key];
+            return isHigh ? "#fff" : d3.color(topicColors[d.key]).brighter(0.7);
         })
         .style("font-size", d => {
             // Fill height: Uses 85% of available central height
@@ -4633,11 +4682,16 @@ function updateTopicEvolutionChart() {
             const maxSizeForWidth = (chartW * 0.45) / (d.key.length * 0.55);
             size = Math.min(size, maxSizeForWidth);
 
+            // SPECIAL CASE: Flexing Wealth and Status (Reduce slightly for overcrowding)
+            if (d.key === "Flexing Wealth and Status") {
+                size *= 0.85;
+            }
+
             return Math.max(size, 8) + "px";
         })
         .style("opacity", d => {
             const noSel = !selectedTopic && !selectedTrack && !comparisonTrack;
-            if (noSel) return 0.6;
+            if (noSel) return 0.85; // Slightly higher base opacity
             const isHigh = (selectedTopic === d.key) ||
                 (selectedTrack && selectedTrack.Topic === d.key) ||
                 (comparisonTrack && comparisonTrack.Topic === d.key);
